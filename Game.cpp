@@ -46,7 +46,35 @@ void Game::GenerateAndSetupNewMap() {
     // 4. Set Player Position
     Player->SetPlayerPos(playerStartPos);
 
+    // Ensure map borders are walls, unless it's a Start or Goal tile
+    int gridWidth = currentMapGrid.width();
+    int gridHeight = currentMapGrid.height();
+
+    if (gridWidth > 0 && gridHeight > 0) { // Proceed only if grid is not empty
+        for (int i = 0; i < gridWidth; ++i) {
+            // Top border
+            if (currentMapGrid[0][i] != 2 && currentMapGrid[0][i] != 4) {
+                currentMapGrid[0][i] = 1;
+            }
+            // Bottom border
+            if (currentMapGrid[gridHeight - 1][i] != 2 && currentMapGrid[gridHeight - 1][i] != 4) {
+                currentMapGrid[gridHeight - 1][i] = 1;
+            }
+        }
+        for (int i = 0; i < gridHeight; ++i) {
+            // Left border
+            if (currentMapGrid[i][0] != 2 && currentMapGrid[i][0] != 4) {
+                currentMapGrid[i][0] = 1;
+            }
+            // Right border
+            if (currentMapGrid[i][gridWidth - 1] != 2 && currentMapGrid[i][gridWidth - 1] != 4) {
+                currentMapGrid[i][gridWidth - 1] = 1;
+            }
+        }
+    }
+
     // 5. Spawn Enemies (Ensure Enemys array is empty - handled by caller during stage change)
+	/*
     for (int y = 0; y < MapGenerator::MAP_SIZE; ++y) {
         for (int x = 0; x < MapGenerator::MAP_SIZE; ++x) {
             if (currentMapGrid[y][x] == 0) { // Game Floor
@@ -59,6 +87,7 @@ void Game::GenerateAndSetupNewMap() {
             }
         }
     }
+	*/
 }
 
 
@@ -186,25 +215,41 @@ void Game::draw() const
 			int tileType = currentMapGrid[y][x];
 			if (tileType == 0) getPaddle(x, y).rounded(3).draw(PieceColor); // Floor
 			else if (tileType == 1) { // Wall
-				bool surrounded = [&]() {
-					const Point DIRS[] = {
-						{-1,-1}, {0,-1}, {1,-1},
-						{-1,0},         {1,0},
-						{-1,1}, {0,1}, {1,1}
-					};
-					for (const auto& dir : DIRS) {
-						int nx = x + dir.x;
-						int ny = y + dir.y;
-						if (nx < 0 || nx >= currentMapGrid.width() || ny < 0 || ny >= currentMapGrid.height()) return false; // Visible (edge of map)
-						if (currentMapGrid[ny][nx] != 1) return false; // Visible (neighbor is not a wall)
-					}
-					return true; // All 8 neighbors are walls and within bounds
-				}(); // Immediately invoke the lambda
+                bool shouldDrawWall = [&]() {
+                    const Point DIRS[] = {{0, -1}, {0, 1}, {-1, 0}, {1, 0}}; // Cardinal directions
+                    for (const auto& dir : DIRS) {
+                        int nx = x + dir.x;
+                        int ny = y + dir.y;
 
-				if (!surrounded) {
-					getPaddle(x, y).rounded(3).draw(Palette::Dimgray);
-				}
-			}
+                        // Check if neighbor is within bounds
+                        if (nx >= 0 && nx < currentMapGrid.width() && ny >= 0 && ny < currentMapGrid.height()) {
+                            int neighborTileType = currentMapGrid[ny][nx];
+                            // Check if neighbor is a passable tile type
+                            if (neighborTileType == 0 || neighborTileType == 2 || neighborTileType == 4) {
+                                return true; // Found a passable cardinal neighbor, so this wall should be drawn
+                            }
+                        }
+                        // If neighbor is out of bounds, this wall is on the edge of the map and should be drawn.
+                        // The new border logic ensures map edges are walls, so this case might not be
+                        // strictly necessary if map edges are always walls and this culling is for internal walls.
+                        // However, if a passable tile (e.g. S or G) is on the border, this wall next to it should draw.
+                        // And if the map could have non-wall edges (not current case), it'd be important.
+                        // For now, the logic is: draw if a cardinal neighbor is passable.
+                        // If a cardinal neighbor is out-of-bounds, it's not passable, so we don't draw based on that.
+                        // This means walls on the very edge of the map that don't border a passable tile internally
+                        // won't be drawn by this logic. The border setting logic in GenerateAndSetupNewMap
+                        // ensures the border is wall.
+                        // This culling is primarily for *internal* walls that are not adjacent to passable space.
+                        // A wall on the border of the grid (e.g. x=0) that has no passable neighbor at (x=1)
+                        // would not be drawn by this. This is likely the desired effect: only draw walls "facing" open areas.
+                    }
+                    return false; // No passable cardinal neighbor found
+                }(); // Immediately invoke the lambda
+
+                if (shouldDrawWall) {
+                    getPaddle(x, y).rounded(3).draw(Palette::Dimgray);
+                }
+            }
 			else if (tileType == 2) getPaddle(x, y).rounded(3).draw(Palette::Green);    // Player Start (Changed to Green)
 			// else if (tileType == 3) getPaddle(x, y).rounded(3).draw(Palette::Red); // Enemy - Enemies drawn separately
 			else if (tileType == 4) getPaddle(x, y).rounded(3).draw(Palette::Yellow);  // Goal
