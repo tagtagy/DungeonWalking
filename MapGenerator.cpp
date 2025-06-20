@@ -1,6 +1,7 @@
 ﻿#include "stdafx.h"
 #include "MapGenerator.hpp"
 #include <queue> // For std::queue in BFS
+#include <utility> // For std::pair
 
 // Helper function to carve L-shaped paths
 // Static because it doesn't depend on MapGenerator instance members
@@ -238,7 +239,7 @@ Grid<int> MapGenerator::generateFullMap(const Array<Array<char>>& miniMap) {
 				if (currentCompID == mainComponentID) continue;
 
 				double minDistance = Math::Inf;
-				s3d::Optional<s3d::Pair<int, int>> closestPairActiveIndices; // {idx_in_main_comp, idx_in_current_comp}
+				s3d::Optional<std::pair<int, int>> closestPairActiveIndices; // {idx_in_main_comp, idx_in_current_comp}
 
 				for (int i = 0; i < activeRooms.size(); ++i) {
 					if (roomComponent[i] == mainComponentID) {
