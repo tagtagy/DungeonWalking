@@ -231,14 +231,14 @@ Grid<int> MapGenerator::generateFullMap(const Array<Array<char>>& miniMap) {
 		}
 
 		if (totalComponents > 1) {
-			Console << U"Multiple room components detected ({}). Attempting to connect them.".format(totalComponents);
+			Console << Format(U"Multiple room components detected ({}). Attempting to connect them.")(totalComponents);
 			int mainComponentID = roomComponent[0]; // Connect everything to component of the first room
 
 			for (int currentCompID = 1; currentCompID <= totalComponents; ++currentCompID) {
 				if (currentCompID == mainComponentID) continue;
 
 				double minDistance = Math::Inf;
-				Optional<Pair<int, int>> closestPairActiveIndices; // {idx_in_main_comp, idx_in_current_comp}
+				s3d::Optional<s3d::Pair<int, int>> closestPairActiveIndices; // {idx_in_main_comp, idx_in_current_comp}
 
 				for (int i = 0; i < activeRooms.size(); ++i) {
 					if (roomComponent[i] == mainComponentID) {
@@ -249,7 +249,7 @@ Grid<int> MapGenerator::generateFullMap(const Array<Array<char>>& miniMap) {
 								double dist = center1.distanceFrom(center2);
 								if (dist < minDistance) {
 									minDistance = dist;
-									closestPairActiveIndices = {{ i, j }};
+									closestPairActiveIndices.emplace(i, j);
 								}
 							}
 						}
@@ -268,7 +268,7 @@ Grid<int> MapGenerator::generateFullMap(const Array<Array<char>>& miniMap) {
 					p2.x = Clamp(p2.x, 0, MAP_SIZE - 1); p2.y = Clamp(p2.y, 0, MAP_SIZE - 1);
 
 					carvePath(map, p1, p2);
-					Console << U"Forcibly connecting room {} (comp {}) to room {} (comp {}).".format(activeRooms[roomIdx1].miniMapPos, roomComponent[roomIdx1], activeRooms[roomIdx2].miniMapPos, roomComponent[roomIdx2]);
+					Console << Format(U"Forcibly connecting room {} (comp {}) to room {} (comp {}).")(activeRooms[roomIdx1].miniMapPos, roomComponent[roomIdx1], activeRooms[roomIdx2].miniMapPos, roomComponent[roomIdx2]);
 					// Conceptually merge: for this simplified approach, we just connect
 					// and the S-G BFS later will use this new path.
 				}
