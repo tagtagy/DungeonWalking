@@ -154,16 +154,16 @@ Grid<int> MapGenerator::generateFullMap(const Array<Array<char>>& miniMap) {
 	}
 
 	// --- BEGIN: Ensure all rooms are interconnected ---
-	// Helper structure to store information about active rooms during connectivity analysis.
+	// 連結性解析中にアクティブな部屋の情報を格納するためのヘルパー構造体。
 	struct RoomInfoInternal {
-		const Room* roomPtr;    // Pointer to the actual Room object
-		Point miniMapPos;       // Original position in the rooms[MINI_SIZE][MINI_SIZE] grid (for debugging/logging)
-		int id;                 // Unique identifier (index in activeRooms array) for this room
+		const Room* roomPtr;    // 実際のRoomオブジェクトへのポインタ。
+		Point miniMapPos;       // ミニマップグリッド上の元の位置（デバッグ/ログ用）。
+		int id;                 // この部屋の一意の識別子（activeRooms配列のインデックス）。
 	};
 
-	// Collect all rooms that were actually placed on the minimap.
+	// ミニマップに実際に配置されたすべての部屋を収集する。
 	Array<RoomInfoInternal> activeRooms;
-	// Grid to quickly map a minimap coordinate (y,x) to the ID (index) of the room in activeRooms.
+	// ミニマップ座標(y,x)をactiveRooms内の部屋のID（インデックス）に迅速にマッピングするためのグリッド。
 	Grid<Optional<int>> roomMiniMapToActiveID(MINI_SIZE, MINI_SIZE);
 
 	for (int y = 0; y < MINI_SIZE; ++y) {
@@ -179,17 +179,16 @@ Grid<int> MapGenerator::generateFullMap(const Array<Array<char>>& miniMap) {
 	if (activeRooms.isEmpty()) {
 		Console << U"Warning: No active rooms found to interconnect.";
 	} else {
-		// Build an adjacency list representing the graph of rooms connected by initial corridors.
+		// 初期の通路によって接続された部屋のグラフを表す隣接リストを構築する。
 		Array<Array<int>> roomAdjList(activeRooms.size());
-		// Iterate through active rooms to find which are connected by the first phase of corridor generation.
+		// アクティブな部屋を反復処理して、最初の通路生成フェーズでどの部屋が接続されたかを確認する。
 		for (int y = 0; y < MINI_SIZE; ++y) {
 			for (int x = 0; x < MINI_SIZE; ++x) {
-				if (!rooms[y][x].has_value()) continue; // Skip if no room here
+				if (!rooms[y][x].has_value()) continue; // ここに部屋がなければスキップ
 				int currentRoomActiveId = roomMiniMapToActiveID[y][x].value();
 				const Room& currentRoomData = rooms[y][x].value();
 
-				// Check neighbors (right and down only) to avoid double-counting connections
-				// and to prevent checking a room against itself.
+				// 接続の二重カウントを避け、自己ループを防ぐため、隣接チェックは右と下方向の隣人のみ行う。
 				for (auto [dx, dy] : Array<Point>{ {1, 0}, {0, 1} }) {
 					int nx = x + dx;
 					int ny = y + dy;
@@ -209,21 +208,21 @@ Grid<int> MapGenerator::generateFullMap(const Array<Array<char>>& miniMap) {
 			}
 		}
 
-		// Clean up adjacency lists: sort and remove duplicates that might occur if logic implies symmetry.
+		// 隣接リストのクリーンアップ：ソートし、対称的なpush_backによって発生する可能性のある重複を削除する。
 		for (auto& adj : roomAdjList) {
 			adj.sort_and_unique();
 		}
 
-		// Identify connected components of rooms using BFS on the room graph.
-		Array<int> roomComponent(activeRooms.size(), -1); // Stores the component ID for each room.
-		int totalComponents = 0;                          // Counter for distinct components.
+		// 部屋グラフ上でBFSを使用して、連結された部屋のコンポーネントを特定する。
+		Array<int> roomComponent(activeRooms.size(), -1); // 各部屋のコンポーネントIDを格納する。
+		int totalComponents = 0;                          // 個別のコンポーネントのカウンター。
 		for (int i = 0; i < activeRooms.size(); ++i) {
-			if (roomComponent[i] == -1) { // If room 'i' hasn't been assigned to a component yet
+			if (roomComponent[i] == -1) { // まだ部屋 'i' がコンポーネントに割り当てられていない場合
 				totalComponents++;
-				std::queue<int> component_q; // Queue for BFS
+				std::queue<int> component_q; // BFS用のキュー
 				component_q.push(i);
-				roomComponent[i] = totalComponents; // Assign new component ID
-				// Perform BFS to find all rooms in this component
+				roomComponent[i] = totalComponents; // 新しいコンポーネントIDを割り当てる
+				// このコンポーネント内のすべての部屋を見つけるためにBFSを実行する
 				while (!component_q.empty()) {
 					int u = component_q.front();
 					component_q.pop();
@@ -237,21 +236,22 @@ Grid<int> MapGenerator::generateFullMap(const Array<Array<char>>& miniMap) {
 			}
 		}
 
-		// If there are multiple disconnected components of rooms, connect them.
+		// 部屋の連結されていないコンポーネントが複数存在する場合、それらを接続する。
 		if (totalComponents > 1) {
-			Console << Format(U"Multiple room components detected ({}). Attempting to connect them.")(totalComponents);
-			// Designate the component of the first active room (or start room, if easily identifiable here) as the main component.
+			Console << Format(U"複数の部屋コンポーネントが検出されました（{}）。接続を試みます。")(totalComponents);
+			// 最初のアクティブな部屋のコンポーネントをメインコンポーネントとして指定する。
+			// (または、簡単に見分けられるならスタート部屋のコンポーネント)
 			int mainComponentID = roomComponent[0];
 
-			// Iterate through all other component IDs found.
+			// 見つかった他のすべてのコンポーネントIDを反復処理する。
 			for (int currentCompID = 1; currentCompID <= totalComponents; ++currentCompID) {
-				if (currentCompID == mainComponentID) continue; // Skip if it's the main component itself
+				if (currentCompID == mainComponentID) continue; // メインコンポーネント自体ならスキップ
 
 				double minDistance = Math::Inf;
-				// Stores {index_in_main_component, index_in_current_component} from activeRooms array
+				// activeRooms配列内の{メインコンポーネントのインデックス, 現在のコンポーネントのインデックス}を格納する
 				s3d::Optional<std::pair<int, int>> closestPairActiveIndices;
 
-				// Find the closest pair of rooms: one from the mainComponentID and one from currentCompID.
+				// 最も近いペアの部屋を見つける：一方はmainComponentIDから、もう一方はcurrentCompIDから。
 				for (int i = 0; i < activeRooms.size(); ++i) {
 					if (roomComponent[i] == mainComponentID) {
 						for (int j = 0; j < activeRooms.size(); ++j) {
@@ -268,7 +268,7 @@ Grid<int> MapGenerator::generateFullMap(const Array<Array<char>>& miniMap) {
 					}
 				}
 
-				// If a closest pair was found, connect them.
+				// 最も近いペアが見つかった場合、それらを接続する。
 				if (closestPairActiveIndices.has_value()) {
 					int roomIdx1 = closestPairActiveIndices.value().first;
 					int roomIdx2 = closestPairActiveIndices.value().second;
@@ -280,10 +280,10 @@ Grid<int> MapGenerator::generateFullMap(const Array<Array<char>>& miniMap) {
 					p1.x = Clamp(p1.x, 0, MAP_SIZE - 1); p1.y = Clamp(p1.y, 0, MAP_SIZE - 1);
 					p2.x = Clamp(p2.x, 0, MAP_SIZE - 1); p2.y = Clamp(p2.y, 0, MAP_SIZE - 1);
 
-					carvePath(map, p1, p2); // Connect them by carving a path in the actual tile map.
+					carvePath(map, p1, p2); // 実際のタイルマップに経路を掘ることでそれらを接続する。
 					Console << Format(U"Forcibly connecting room {} (comp {}) to room {} (comp {}).")(activeRooms[roomIdx1].miniMapPos, roomComponent[roomIdx1], activeRooms[roomIdx2].miniMapPos, roomComponent[roomIdx2]);
-					// For this simplified approach, we don't explicitly merge component IDs in roomComponent array here.
-					// We just ensure a physical path exists. The S-G BFS later will use these new paths.
+					// この簡略化されたアプローチでは、ここではroomComponent配列内のコンポーネントIDを明示的にマージしない。
+					// 物理的な経路が存在することを確認するだけ。後のS-G BFSがこれらの新しい経路を使用する。
 				}
 			}
 		}
