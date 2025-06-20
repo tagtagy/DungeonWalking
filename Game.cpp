@@ -1,29 +1,78 @@
 ﻿# include "Game.hpp"
 
+void Game::GenerateAndSetupNewMap() {
+    // 1. Generate Map Layout from MapGenerator
+    auto miniMap = generator.generateMiniMap();
+    auto generatedLayout = generator.generateFullMap(miniMap); // Grid<int>
+
+    // 2. Initialize currentMapGrid
+    currentMapGrid.resize(MapGenerator::MAP_SIZE, MapGenerator::MAP_SIZE);
+
+    // 3. Adapt generatedLayout to currentMapGrid and identify S and G tiles
+    if (!generator.startTile_generated.has_value() || !generator.goalTile_generated.has_value()) {
+        Console << U"Error: MapGenerator did not set start or goal tile.";
+        // Consider a fallback or error state
+        // For now, try to generate a default small map or exit
+        // This example will just create a very simple fallback map if generation fails critically
+        currentMapGrid.assign(MapGenerator::MAP_SIZE, MapGenerator::MAP_SIZE, 1); // All walls
+        currentMapGrid[1][1] = 2; // Player start
+        currentMapGrid[1][2] = 4; // Goal
+        Player->SetPlayerPos(Point{1,1});
+        // Optionally clear enemies if any were added before this point in a retry scenario
+        for (auto* enemy : Enemys) { delete enemy; }
+        Enemys.clear();
+        return;
+    }
+
+    Point playerStartPos = generator.startTile_generated.value();
+    Point goalPos = generator.goalTile_generated.value();
+
+    for (int y = 0; y < MapGenerator::MAP_SIZE; ++y) {
+        for (int x = 0; x < MapGenerator::MAP_SIZE; ++x) {
+            if (Point(x, y) == playerStartPos) {
+                currentMapGrid[y][x] = 2; // Player Start
+            } else if (Point(x, y) == goalPos) {
+                currentMapGrid[y][x] = 4; // Goal
+            } else if (generatedLayout[y][x] == 0) { // MapGenerator Wall (assuming 0 is wall from generator)
+                currentMapGrid[y][x] = 1; // Game Wall
+            } else if (generatedLayout[y][x] == 1) { // MapGenerator Floor (assuming 1 is floor from generator)
+                currentMapGrid[y][x] = 0; // Game Floor
+            } else {
+                currentMapGrid[y][x] = 1; // Default to wall if unknown tile from generator
+            }
+        }
+    }
+
+    // 4. Set Player Position
+    Player->SetPlayerPos(playerStartPos);
+
+    // 5. Spawn Enemies (Ensure Enemys array is empty - handled by caller during stage change)
+    for (int y = 0; y < MapGenerator::MAP_SIZE; ++y) {
+        for (int x = 0; x < MapGenerator::MAP_SIZE; ++x) {
+            if (currentMapGrid[y][x] == 0) { // Game Floor
+                if (Random(0.05)) { // 5% chance to spawn an enemy
+                    if (Enemys.size() < 100) { // Max 100 enemies, sanity check
+                        Enemys << new BaseEnemy(Point{ x,y }, 0); // Type 0 enemy
+                        // currentMapGrid[y][x] = 3; // Mark tile as enemy - NO, keep floor as 0, draw enemy on top
+                    }
+                }
+            }
+        }
+    }
+}
+
+
 Game::Game(const InitData& init)
 	: IScene{ init }
 {
 	Player = new BasePlayer;
-
-	//敵味方の初期位置
-	for (int y = 0; y < RoomMap[NowStage].height(); y++) {
-		for (int x = 0; x < RoomMap[NowStage].width(); x++) {
-			if (RoomMap[NowStage][y][x] == 2) {
-				Player->SetPlayerPos(Point{ x,y });
-			}
-			else if (RoomMap[NowStage][y][x] == 3)Enemys << new BaseEnemy(Point{ x,y }, 0);
-		}
-	}
-
-
-	Point pos = { (PieceSize * Player->GetPlayerPos().x) + (WallThickness * (Player->GetPlayerPos().x + 1)),
-				  (PieceSize * Player->GetPlayerPos().y) + (WallThickness * (Player->GetPlayerPos().y + 1))};
+	GenerateAndSetupNewMap(); // Generate the first map
 
 	//カメラの初期位置
-	camera = new Camera(pos - Point((800 - 150) / 2, (600 - 150) / 2));
-
-
-
+	// Player->GetPlayerPos() is now set by GenerateAndSetupNewMap()
+	Point playerPixelPos = { (PieceSize * Player->GetPlayerPos().x) + (WallThickness * (Player->GetPlayerPos().x + 1)),
+							 (PieceSize * Player->GetPlayerPos().y) + (WallThickness * (Player->GetPlayerPos().y + 1)) };
+	camera = new Camera(playerPixelPos - Point((800 - 150) / 2, (600 - 150) / 2));
 }
 
 void Game::update()
@@ -64,83 +113,89 @@ void Game::InputMove(int _x, int _y) {
 	}
 
 	//プレイヤー移動
-	Point enemy = Player->Move(_x, _y, RoomMap[NowStage]);
+	Point enemyHitPos = Player->Move(_x, _y, currentMapGrid); // Use currentMapGrid
 
-	//プレイヤーがマップを進めるマスにいるか
-	if (enemy.x == -2) {
+	//プレイヤーがマップを進めるマスにいるか (Goal tile is 4)
+	if (currentMapGrid[Player->GetPlayerPos().y][Player->GetPlayerPos().x] == 4) {
+		NowStage++;
 
-		if (NowStage + 1 >= RoomMap.size()) {
+		if (NowStage >= 10) { // Example: Game ends after 10 stages
 			changeScene(State::Title);
 			return;
 		}
-		else {
-			//ステージ更新
-			NowStage++;
-			//敵味方の初期位置
-			for (int y = 0; y < RoomMap[NowStage].height(); y++) {
-				for (int x = 0; x < RoomMap[NowStage].width(); x++) {
-					if (RoomMap[NowStage][y][x] == 2)Player->SetPlayerPos(Point{ x,y });
-					else if (RoomMap[NowStage][y][x] == 3)Enemys << new BaseEnemy(Point{ x,y }, 0);
-				}
-			}
-			//カメラ更新
-			camera->MoveCamera(PieceSize, WallThickness, Player->GetPlayerPos());
-			return;
+
+		// Clear existing enemies (already handled by bug fix: pointers deleted, array cleared)
+		for (auto* enemyPtr : Enemys) { // This loop should be here as per previous fix
+			delete enemyPtr;
 		}
+		Enemys.clear();
+
+		GenerateAndSetupNewMap(); // Generate and set up the new map
+
+		camera->MoveCamera(PieceSize, WallThickness, Player->GetPlayerPos());
+		return;
 	}
 	//カメラ更新
 	camera->MoveCamera(PieceSize, WallThickness, Player->GetPlayerPos());
 
 	//ダメージ
-	if (enemy != Point{ -1,-1 }) {
+	if (enemyHitPos != Point{ -1,-1 }) { // If player hit an enemy
 		for (int i = 0; i < Enemys.size(); i++) {
-			if (Enemys[i]->GetEnemyPos() == enemy)Enemys[i]->Damage(Player->Attack());
+			if (Enemys[i]->GetEnemyPos() == enemyHitPos) {
+				Enemys[i]->Damage(Player->Attack());
+				// No need to change tile on map for enemy damage/death, handled by enemy removal
+			}
 		}
 	}
 
-	//敵の生存確認
-	for (int i = 0; i < Enemys.size(); i++)
-	{
-		if (Enemys[i]->GetDeath())
-		{
-			RoomMap[NowStage][Enemys[i]->GetEnemyPos().y][Enemys[i]->GetEnemyPos().x] = 0;
+	//敵の生存確認 & remove dead enemies
+	// When an enemy dies, its tile should revert to floor (0)
+	// This part is tricky: BaseEnemy doesn't store its original tile type.
+	// For now, we assume if an enemy was on a tile, it becomes floor (0).
+	// A better way would be to have a separate grid for dynamic entities or store original tile.
+	for (int i = static_cast<int>(Enemys.size()) - 1; i >= 0; --i) {
+		if (Enemys[i]->GetDeath()) {
+			// Optional: currentMapGrid[Enemys[i]->GetEnemyPos().y][Enemys[i]->GetEnemyPos().x] = 0; // Set tile to floor
+			delete Enemys[i];
+			Enemys.remove_at(i);
 		}
 	}
-	Enemys.remove_if([](BaseEnemy* x) {return x->GetDeath(); });
+	// Enemys.remove_if([](BaseEnemy* x) {bool isDead = x->GetDeath(); if(isDead) delete x; return isDead; }); // Alternative with delete
 
 	//エネミー移動と攻撃
-	for (auto& enemy : Enemys) {
-		Player->Damage(enemy->Move(Player->GetPlayerPos(), RoomMap[NowStage]));
+	for (auto& currentEnemy : Enemys) { // Renamed to avoid conflict
+		Player->Damage(currentEnemy->Move(Player->GetPlayerPos(), currentMapGrid)); // Use currentMapGrid
 	}
 }
 
-void Game::Map() {
-	auto miniMap = generator.generateMiniMap();           // ミニマップ生成
-	auto fullMap = generator.generateFullMap(miniMap);    // 実マップ生成
-
-	for (int y = 0; y < MapGenerator::MAP_SIZE; ++y)
-		for (int x = 0; x < MapGenerator::MAP_SIZE; ++x)
-			if (fullMap[y][x] == 1)
-				Rect(x * 10, y * 10, 10, 10).draw(ColorF(0.3));
-}
+// void Game::Map() { // Removed as per instruction
+// }
 
 void Game::draw() const
 {
 	Scene::SetBackground(ColorF{ 0.2 });
 
-	//ステージプレーン
-	for (int x = 0; x < RoomMap[NowStage].width(); x++) {
-		for (int y = 0; y < RoomMap[NowStage].height(); y++) {
+	if (currentMapGrid.isEmpty()) return; // Guard against drawing empty map
 
-			if (RoomMap[NowStage][y][x] == 0)getPaddle(x, y).rounded(3).draw(PieceColor);
-			else if (RoomMap[NowStage][y][x] == 1)getPaddle(x, y).rounded(3).draw(Palette::Dimgray);
-			else if (RoomMap[NowStage][y][x] == 2)getPaddle(x, y).rounded(3).draw(Palette::Blue);
-			else if (RoomMap[NowStage][y][x] == 3)getPaddle(x, y).rounded(3).draw(Palette::Red);
-			else if (RoomMap[NowStage][y][x] == 4)getPaddle(x, y).rounded(3).draw(Palette::Yellow);
+	//ステージプレーン
+	for (int y = 0; y < currentMapGrid.height(); y++) { // Use currentMapGrid
+		for (int x = 0; x < currentMapGrid.width(); x++) { // Use currentMapGrid
+			int tileType = currentMapGrid[y][x];
+			if (tileType == 0) getPaddle(x, y).rounded(3).draw(PieceColor); // Floor
+			else if (tileType == 1) getPaddle(x, y).rounded(3).draw(Palette::Dimgray); // Wall
+			else if (tileType == 2) getPaddle(x, y).rounded(3).draw(Palette::Blue);    // Player Start
+			// else if (tileType == 3) getPaddle(x, y).rounded(3).draw(Palette::Red); // Enemy - Enemies drawn separately
+			else if (tileType == 4) getPaddle(x, y).rounded(3).draw(Palette::Yellow);  // Goal
+			else { // Default for floor if enemy was there or other unknown
+				getPaddle(x,y).rounded(3).draw(PieceColor);
+			}
 		}
 	}
 
-	//敵の移動経路
+	// Player is drawn by its own class or needs to be drawn here
+	// Player->draw(...); // Assuming BasePlayer has a draw method
+
+	//敵の移動経路 (Enemies themselves)
 	for (auto& enemy : Enemys) {
 		enemy->draw(PieceSize, WallThickness, camera->GetCamera());
 	}
