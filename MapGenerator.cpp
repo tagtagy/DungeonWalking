@@ -152,6 +152,131 @@ Grid<int> MapGenerator::generateFullMap(const Array<Array<char>>& miniMap) {
 		}
 	}
 
+	// --- BEGIN: Ensure all rooms are interconnected ---
+	struct RoomInfoInternal {
+		const Room* roomPtr;
+		Point miniMapPos; // Original position in the rooms[MINI_SIZE][MINI_SIZE] grid
+		int id;           // Index in activeRooms array
+	};
+
+	Array<RoomInfoInternal> activeRooms;
+	Grid<Optional<int>> roomMiniMapToActiveID(MINI_SIZE, MINI_SIZE); // Maps minimap pos to activeRooms ID
+
+	for (int y = 0; y < MINI_SIZE; ++y) {
+		for (int x = 0; x < MINI_SIZE; ++x) {
+			if (rooms[y][x].has_value()) {
+				int currentId = static_cast<int>(activeRooms.size());
+				activeRooms.push_back(RoomInfoInternal{ &rooms[y][x].value(), Point(x,y), currentId });
+				roomMiniMapToActiveID[y][x] = currentId;
+			}
+		}
+	}
+
+	if (activeRooms.isEmpty()) {
+		Console << U"Warning: No active rooms found to interconnect.";
+	} else {
+		Array<Array<int>> roomAdjList(activeRooms.size());
+		// Re-check connections based on the initial corridor generation phase
+		// This assumes corridors were attempted between all valid adjacent non S-G rooms
+		for (int y = 0; y < MINI_SIZE; ++y) {
+			for (int x = 0; x < MINI_SIZE; ++x) {
+				if (!rooms[y][x].has_value()) continue;
+				int currentRoomActiveId = roomMiniMapToActiveID[y][x].value();
+				const Room& currentRoomData = rooms[y][x].value();
+
+				// Check neighbors (right and down to avoid double counting and self-loops here)
+				for (auto [dx, dy] : Array<Point>{ {1, 0}, {0, 1} }) {
+					int nx = x + dx;
+					int ny = y + dy;
+					if (InRange(nx, 0, MINI_SIZE - 1) && InRange(ny, 0, MINI_SIZE - 1)) {
+						if (rooms[ny][nx].has_value()) {
+							const Room& neighborRoomData = rooms[ny][nx].value();
+							// Check S-G rule again, as original loop did
+							if (!((currentRoomData.type == 'S' && neighborRoomData.type == 'G') ||
+								(currentRoomData.type == 'G' && neighborRoomData.type == 'S'))) {
+								int neighborRoomActiveId = roomMiniMapToActiveID[ny][nx].value();
+								roomAdjList[currentRoomActiveId].push_back(neighborRoomActiveId);
+								roomAdjList[neighborRoomActiveId].push_back(currentRoomActiveId);
+							}
+						}
+					}
+				}
+			}
+		}
+
+		// Remove duplicate entries from adjacency lists (if any from symmetric push_back)
+		for (auto& adj : roomAdjList) {
+			adj.sort_and_unique();
+		}
+
+		Array<int> roomComponent(activeRooms.size(), -1);
+		int totalComponents = 0;
+		for (int i = 0; i < activeRooms.size(); ++i) {
+			if (roomComponent[i] == -1) {
+				totalComponents++;
+				std::queue<int> component_q;
+				component_q.push(i);
+				roomComponent[i] = totalComponents;
+				while (!component_q.empty()) {
+					int u = component_q.front();
+					component_q.pop();
+					for (int v : roomAdjList[u]) {
+						if (roomComponent[v] == -1) {
+							roomComponent[v] = totalComponents;
+							component_q.push(v);
+						}
+					}
+				}
+			}
+		}
+
+		if (totalComponents > 1) {
+			Console << U"Multiple room components detected ({}). Attempting to connect them.".format(totalComponents);
+			int mainComponentID = roomComponent[0]; // Connect everything to component of the first room
+
+			for (int currentCompID = 1; currentCompID <= totalComponents; ++currentCompID) {
+				if (currentCompID == mainComponentID) continue;
+
+				double minDistance = Math::Inf;
+				Optional<Pair<int, int>> closestPairActiveIndices; // {idx_in_main_comp, idx_in_current_comp}
+
+				for (int i = 0; i < activeRooms.size(); ++i) {
+					if (roomComponent[i] == mainComponentID) {
+						for (int j = 0; j < activeRooms.size(); ++j) {
+							if (roomComponent[j] == currentCompID) {
+								Point center1 = activeRooms[i].roomPtr->area.center().asPoint();
+								Point center2 = activeRooms[j].roomPtr->area.center().asPoint();
+								double dist = center1.distanceFrom(center2);
+								if (dist < minDistance) {
+									minDistance = dist;
+									closestPairActiveIndices = {{ i, j }};
+								}
+							}
+						}
+					}
+				}
+
+				if (closestPairActiveIndices.has_value()) {
+					int roomIdx1 = closestPairActiveIndices.value().first;
+					int roomIdx2 = closestPairActiveIndices.value().second;
+
+					Point p1 = activeRooms[roomIdx1].roomPtr->area.center().asPoint();
+					Point p2 = activeRooms[roomIdx2].roomPtr->area.center().asPoint();
+
+					// Clamp points before carving path, just in case room centers are at edge
+					p1.x = Clamp(p1.x, 0, MAP_SIZE - 1); p1.y = Clamp(p1.y, 0, MAP_SIZE - 1);
+					p2.x = Clamp(p2.x, 0, MAP_SIZE - 1); p2.y = Clamp(p2.y, 0, MAP_SIZE - 1);
+
+					carvePath(map, p1, p2);
+					Console << U"Forcibly connecting room {} (comp {}) to room {} (comp {}).".format(activeRooms[roomIdx1].miniMapPos, roomComponent[roomIdx1], activeRooms[roomIdx2].miniMapPos, roomComponent[roomIdx2]);
+					// Conceptually merge: for this simplified approach, we just connect
+					// and the S-G BFS later will use this new path.
+				}
+			}
+		}
+	}
+	// --- END: Ensure all rooms are interconnected ---
+
 	// S-G Connectivity Check and Enforcement
 	Optional<Room> sRoomOpt, gRoomOpt;
 	for (int y = 0; y < MINI_SIZE; ++y) {
