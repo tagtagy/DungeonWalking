@@ -14,6 +14,9 @@ public:
 	// フルマップ（実マップ）を生成する関数
 	Grid<int> generateFullMap(const Array<Array<char>>& miniMap);
 
+	Optional<Point> startTile_generated;
+	Optional<Point> goalTile_generated;
+
 private:
 	// 各部屋の情報を格納する構造体
 	struct Room {

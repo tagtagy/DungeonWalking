@@ -63,6 +63,9 @@ Array<Array<char>> MapGenerator::generateMiniMap() {
 
 // 実際のマップを生成する処理
 Grid<int> MapGenerator::generateFullMap(const Array<Array<char>>& miniMap) {
+	startTile_generated.reset();
+	goalTile_generated.reset();
+
 	Grid<int> map(MAP_SIZE, MAP_SIZE, 0); // 初期状態はすべて通れないマス（0）
 	Array<Array<Optional<Room>>> rooms(MINI_SIZE, Array<Optional<Room>>(MINI_SIZE));
 
@@ -165,8 +168,24 @@ Grid<int> MapGenerator::generateFullMap(const Array<Array<char>>& miniMap) {
 
 	if (!sRoomOpt.has_value() || !gRoomOpt.has_value()) {
 		Console << U"Error: Start ('S') or Goal ('G') room not found in miniMap.";
+		// Reset them again here just in case, though they should be reset at function start
+		startTile_generated.reset();
+		goalTile_generated.reset();
 		return map; // Return map as is
 	}
+
+	// Store S and G tile locations
+	// Using .tl() (top-left) as it's a defined point of the room's Rect.
+	// Clamping to ensure they are within map boundaries.
+	Point sPos = sRoomOpt.value().area.tl();
+	sPos.x = Clamp(sPos.x, 0, MAP_SIZE - 1);
+	sPos.y = Clamp(sPos.y, 0, MAP_SIZE - 1);
+	startTile_generated = sPos;
+
+	Point gPos = gRoomOpt.value().area.tl();
+	gPos.x = Clamp(gPos.x, 0, MAP_SIZE - 1);
+	gPos.y = Clamp(gPos.y, 0, MAP_SIZE - 1);
+	goalTile_generated = gPos;
 
 	const Room& sRoom = sRoomOpt.value();
 	const Room& gRoom = gRoomOpt.value();
