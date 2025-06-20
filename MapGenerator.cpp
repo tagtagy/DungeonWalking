@@ -154,14 +154,17 @@ Grid<int> MapGenerator::generateFullMap(const Array<Array<char>>& miniMap) {
 	}
 
 	// --- BEGIN: Ensure all rooms are interconnected ---
+	// Helper structure to store information about active rooms during connectivity analysis.
 	struct RoomInfoInternal {
-		const Room* roomPtr;
-		Point miniMapPos; // Original position in the rooms[MINI_SIZE][MINI_SIZE] grid
-		int id;           // Index in activeRooms array
+		const Room* roomPtr;    // Pointer to the actual Room object
+		Point miniMapPos;       // Original position in the rooms[MINI_SIZE][MINI_SIZE] grid (for debugging/logging)
+		int id;                 // Unique identifier (index in activeRooms array) for this room
 	};
 
+	// Collect all rooms that were actually placed on the minimap.
 	Array<RoomInfoInternal> activeRooms;
-	Grid<Optional<int>> roomMiniMapToActiveID(MINI_SIZE, MINI_SIZE); // Maps minimap pos to activeRooms ID
+	// Grid to quickly map a minimap coordinate (y,x) to the ID (index) of the room in activeRooms.
+	Grid<Optional<int>> roomMiniMapToActiveID(MINI_SIZE, MINI_SIZE);
 
 	for (int y = 0; y < MINI_SIZE; ++y) {
 		for (int x = 0; x < MINI_SIZE; ++x) {
@@ -176,16 +179,17 @@ Grid<int> MapGenerator::generateFullMap(const Array<Array<char>>& miniMap) {
 	if (activeRooms.isEmpty()) {
 		Console << U"Warning: No active rooms found to interconnect.";
 	} else {
+		// Build an adjacency list representing the graph of rooms connected by initial corridors.
 		Array<Array<int>> roomAdjList(activeRooms.size());
-		// Re-check connections based on the initial corridor generation phase
-		// This assumes corridors were attempted between all valid adjacent non S-G rooms
+		// Iterate through active rooms to find which are connected by the first phase of corridor generation.
 		for (int y = 0; y < MINI_SIZE; ++y) {
 			for (int x = 0; x < MINI_SIZE; ++x) {
-				if (!rooms[y][x].has_value()) continue;
+				if (!rooms[y][x].has_value()) continue; // Skip if no room here
 				int currentRoomActiveId = roomMiniMapToActiveID[y][x].value();
 				const Room& currentRoomData = rooms[y][x].value();
 
-				// Check neighbors (right and down to avoid double counting and self-loops here)
+				// Check neighbors (right and down only) to avoid double-counting connections
+				// and to prevent checking a room against itself.
 				for (auto [dx, dy] : Array<Point>{ {1, 0}, {0, 1} }) {
 					int nx = x + dx;
 					int ny = y + dy;
@@ -205,19 +209,21 @@ Grid<int> MapGenerator::generateFullMap(const Array<Array<char>>& miniMap) {
 			}
 		}
 
-		// Remove duplicate entries from adjacency lists (if any from symmetric push_back)
+		// Clean up adjacency lists: sort and remove duplicates that might occur if logic implies symmetry.
 		for (auto& adj : roomAdjList) {
 			adj.sort_and_unique();
 		}
 
-		Array<int> roomComponent(activeRooms.size(), -1);
-		int totalComponents = 0;
+		// Identify connected components of rooms using BFS on the room graph.
+		Array<int> roomComponent(activeRooms.size(), -1); // Stores the component ID for each room.
+		int totalComponents = 0;                          // Counter for distinct components.
 		for (int i = 0; i < activeRooms.size(); ++i) {
-			if (roomComponent[i] == -1) {
+			if (roomComponent[i] == -1) { // If room 'i' hasn't been assigned to a component yet
 				totalComponents++;
-				std::queue<int> component_q;
+				std::queue<int> component_q; // Queue for BFS
 				component_q.push(i);
-				roomComponent[i] = totalComponents;
+				roomComponent[i] = totalComponents; // Assign new component ID
+				// Perform BFS to find all rooms in this component
 				while (!component_q.empty()) {
 					int u = component_q.front();
 					component_q.pop();
@@ -231,16 +237,21 @@ Grid<int> MapGenerator::generateFullMap(const Array<Array<char>>& miniMap) {
 			}
 		}
 
+		// If there are multiple disconnected components of rooms, connect them.
 		if (totalComponents > 1) {
 			Console << Format(U"Multiple room components detected ({}). Attempting to connect them.")(totalComponents);
-			int mainComponentID = roomComponent[0]; // Connect everything to component of the first room
+			// Designate the component of the first active room (or start room, if easily identifiable here) as the main component.
+			int mainComponentID = roomComponent[0];
 
+			// Iterate through all other component IDs found.
 			for (int currentCompID = 1; currentCompID <= totalComponents; ++currentCompID) {
-				if (currentCompID == mainComponentID) continue;
+				if (currentCompID == mainComponentID) continue; // Skip if it's the main component itself
 
 				double minDistance = Math::Inf;
-				s3d::Optional<std::pair<int, int>> closestPairActiveIndices; // {idx_in_main_comp, idx_in_current_comp}
+				// Stores {index_in_main_component, index_in_current_component} from activeRooms array
+				s3d::Optional<std::pair<int, int>> closestPairActiveIndices;
 
+				// Find the closest pair of rooms: one from the mainComponentID and one from currentCompID.
 				for (int i = 0; i < activeRooms.size(); ++i) {
 					if (roomComponent[i] == mainComponentID) {
 						for (int j = 0; j < activeRooms.size(); ++j) {
@@ -257,6 +268,7 @@ Grid<int> MapGenerator::generateFullMap(const Array<Array<char>>& miniMap) {
 					}
 				}
 
+				// If a closest pair was found, connect them.
 				if (closestPairActiveIndices.has_value()) {
 					int roomIdx1 = closestPairActiveIndices.value().first;
 					int roomIdx2 = closestPairActiveIndices.value().second;
@@ -268,10 +280,10 @@ Grid<int> MapGenerator::generateFullMap(const Array<Array<char>>& miniMap) {
 					p1.x = Clamp(p1.x, 0, MAP_SIZE - 1); p1.y = Clamp(p1.y, 0, MAP_SIZE - 1);
 					p2.x = Clamp(p2.x, 0, MAP_SIZE - 1); p2.y = Clamp(p2.y, 0, MAP_SIZE - 1);
 
-					carvePath(map, p1, p2);
+					carvePath(map, p1, p2); // Connect them by carving a path in the actual tile map.
 					Console << Format(U"Forcibly connecting room {} (comp {}) to room {} (comp {}).")(activeRooms[roomIdx1].miniMapPos, roomComponent[roomIdx1], activeRooms[roomIdx2].miniMapPos, roomComponent[roomIdx2]);
-					// Conceptually merge: for this simplified approach, we just connect
-					// and the S-G BFS later will use this new path.
+					// For this simplified approach, we don't explicitly merge component IDs in roomComponent array here.
+					// We just ensure a physical path exists. The S-G BFS later will use these new paths.
 				}
 			}
 		}
