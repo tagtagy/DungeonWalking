@@ -87,6 +87,9 @@ void Game::update()
 	if (KeyNum8.down()) InputMove( 0, -1);
 	if (KeyNum9.down()) InputMove( 1, -1);
 
+	if (KeyM.down()) {
+		showFullMap = !showFullMap;
+	}
 
 	if (IsMove) {
 
@@ -182,8 +185,27 @@ void Game::draw() const
 		for (int x = 0; x < currentMapGrid.width(); x++) { // Use currentMapGrid
 			int tileType = currentMapGrid[y][x];
 			if (tileType == 0) getPaddle(x, y).rounded(3).draw(PieceColor); // Floor
-			else if (tileType == 1) getPaddle(x, y).rounded(3).draw(Palette::Dimgray); // Wall
-			else if (tileType == 2) getPaddle(x, y).rounded(3).draw(Palette::Blue);    // Player Start
+			else if (tileType == 1) { // Wall
+				bool surrounded = [&]() {
+					const Point DIRS[] = {
+						{-1,-1}, {0,-1}, {1,-1},
+						{-1,0},         {1,0},
+						{-1,1}, {0,1}, {1,1}
+					};
+					for (const auto& dir : DIRS) {
+						int nx = x + dir.x;
+						int ny = y + dir.y;
+						if (nx < 0 || nx >= currentMapGrid.width() || ny < 0 || ny >= currentMapGrid.height()) return false; // Visible (edge of map)
+						if (currentMapGrid[ny][nx] != 1) return false; // Visible (neighbor is not a wall)
+					}
+					return true; // All 8 neighbors are walls and within bounds
+				}(); // Immediately invoke the lambda
+
+				if (!surrounded) {
+					getPaddle(x, y).rounded(3).draw(Palette::Dimgray);
+				}
+			}
+			else if (tileType == 2) getPaddle(x, y).rounded(3).draw(Palette::Green);    // Player Start (Changed to Green)
 			// else if (tileType == 3) getPaddle(x, y).rounded(3).draw(Palette::Red); // Enemy - Enemies drawn separately
 			else if (tileType == 4) getPaddle(x, y).rounded(3).draw(Palette::Yellow);  // Goal
 			else { // Default for floor if enemy was there or other unknown
@@ -207,6 +229,65 @@ void Game::draw() const
 
 		CharaWindow.draw(Palette::Black).drawFrame(2, Palette::White);
 		texture[0](250, 0, 300, 400).fitted(CharaWindow.size).drawAt(CharaWindow.center().x, 350);
+	}
+
+	if (showFullMap) {
+		const Point fullMapOffset(10, 10); // Small offset from screen edge
+
+		// Optional: Draw a semi-transparent background for the full map panel
+		Rect((fullMapOffset.x - 2), (fullMapOffset.y - 2),
+			(MapGenerator::MAP_SIZE * FullMapTileRenderSize) + 4,
+			(MapGenerator::MAP_SIZE * FullMapTileRenderSize) + 4)
+			.draw(ColorF(0.1, 0.1, 0.1, 0.8));
+
+		for (int y = 0; y < MapGenerator::MAP_SIZE; ++y) {
+			for (int x = 0; x < MapGenerator::MAP_SIZE; ++x) {
+				RectF tileRect(fullMapOffset.x + (x * FullMapTileRenderSize),
+					fullMapOffset.y + (y * FullMapTileRenderSize),
+					FullMapTileRenderSize, FullMapTileRenderSize);
+
+				if (y < currentMapGrid.height() && x < currentMapGrid.width()) { // Check bounds for currentMapGrid
+					int tileType = currentMapGrid[y][x];
+					if (tileType == 1) { // Wall
+						tileRect.draw(Palette::Dimgray);
+					}
+					else if (tileType == 0) { // Floor
+						tileRect.draw(PieceColor);
+					}
+					else if (tileType == 2) { // Original Start Position tile
+						tileRect.draw(Palette::Green);
+					}
+					else if (tileType == 4) { // Goal Position tile
+						tileRect.draw(Palette::Yellow);
+					}
+					// Tile type 3 (enemy position) is not explicitly drawn as a tile, enemies are drawn on top
+					else { // Default for any other tile type (e.g. if enemy was 3)
+						tileRect.draw(PieceColor); // Default to floor color
+					}
+				}
+				else { // If MapGenerator::MAP_SIZE is larger than currentMapGrid, draw as void/black
+					tileRect.draw(Palette::Black);
+				}
+			}
+		}
+
+		// Draw Player on the full map
+		if (Player) { // Check if Player exists
+			RectF playerMapRect(fullMapOffset.x + (Player->GetPlayerPos().x * FullMapTileRenderSize),
+				fullMapOffset.y + (Player->GetPlayerPos().y * FullMapTileRenderSize),
+				FullMapTileRenderSize, FullMapTileRenderSize);
+			playerMapRect.draw(Palette::Cyan);
+		}
+
+		// Draw Enemies on the full map
+		for (const auto& enemy : Enemys) {
+			if (enemy) { // Ensure enemy pointer is valid
+				RectF enemyMapRect(fullMapOffset.x + (enemy->GetEnemyPos().x * FullMapTileRenderSize),
+					fullMapOffset.y + (enemy->GetEnemyPos().y * FullMapTileRenderSize),
+					FullMapTileRenderSize, FullMapTileRenderSize);
+				enemyMapRect.draw(Palette::Red);
+			}
+		}
 	}
 }
 

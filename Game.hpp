@@ -72,4 +72,9 @@ private:
 	Array<BaseEnemy*> Enemys;
 	
 	Camera* camera = nullptr;
+
+	// Full map display toggle
+	bool showFullMap = false;
+public: // Made public for access in Game.cpp for now, can be refactored if Game class owns render consts
+	static constexpr int FullMapTileRenderSize = 8;
 };
