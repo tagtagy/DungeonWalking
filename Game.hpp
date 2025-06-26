@@ -18,6 +18,7 @@ class Game : public App::Scene
 public:
 
 	Game(const InitData& init);
+	~Game(); // Declare destructor
 
 	void update() override;
 
@@ -36,7 +37,7 @@ private:
 	//ピースのサイズ
 	int PieceSize = 30;
 	//現在のステージ
-	short NowStage = 0;
+	static short s_currentStage; // Changed to static
 
 	MapGenerator generator;
 
