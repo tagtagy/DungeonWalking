@@ -1,27 +1,27 @@
 ﻿# include "Game.hpp"
 
-// Define and Initialize Static Member
+// 静的メンバーの定義と初期化
 short Game::s_currentStage = 0;
 
 void Game::GenerateAndSetupNewMap() {
-    // 1. Generate Map Layout from MapGenerator
+    // 1. MapGeneratorから地図レイアウトを生成する
     auto miniMap = generator.generateMiniMap();
     auto generatedLayout = generator.generateFullMap(miniMap); // Grid<int>
 
-    // 2. Initialize currentMapGrid
+    // 2. currentMapGrid を初期化します。
     currentMapGrid.resize(MapGenerator::MAP_SIZE, MapGenerator::MAP_SIZE);
 
-    // 3. Adapt generatedLayout to currentMapGrid and identify S and G tiles
+    // 3. 生成されたレイアウトを現在のマップグリッドに適用し、SタイルとGタイルを特定する。
     if (!generator.startTile_generated.has_value() || !generator.goalTile_generated.has_value()) {
         Console << U"Error: MapGenerator did not set start or goal tile.";
-        // Consider a fallback or error state
-        // For now, try to generate a default small map or exit
-        // This example will just create a very simple fallback map if generation fails critically
+        // フォールバックまたはエラー状態を考慮する
+        // 現在は、デフォルトの小さなマップを生成するか、終了する
+        // この例では、生成が重大なエラーで失敗した場合、非常にシンプルなフォールバックマップを作成する
         currentMapGrid.assign(MapGenerator::MAP_SIZE, MapGenerator::MAP_SIZE, 1); // All walls
-        currentMapGrid[1][1] = 2; // Player start
-        currentMapGrid[1][2] = 4; // Goal
+        currentMapGrid[1][1] = 2; // プレイヤー開始
+        currentMapGrid[1][2] = 4; // ゴール
         Player->SetPlayerPos(Point{1,1});
-        // Optionally clear enemies if any were added before this point in a retry scenario
+        // リトライシナリオにおいて、この時点以前に追加された敵がいる場合、任意でそれらを消去する。
         for (auto* enemy : Enemys) { delete enemy; }
         Enemys.clear();
         return;
@@ -46,43 +46,43 @@ void Game::GenerateAndSetupNewMap() {
         }
     }
 
-    // 4. Set Player Position
+    // 4. プレイヤーの位置を設定する
     Player->SetPlayerPos(playerStartPos);
 
-    // Ensure map borders are walls, unless it's a Start or Goal tile
+    // マップの境界線は壁である必要があります。ただし、スタートタイルまたはゴールタイルである場合は除きます。
     int gridWidth = currentMapGrid.width();
     int gridHeight = currentMapGrid.height();
 
-    if (gridWidth > 0 && gridHeight > 0) { // Proceed only if grid is not empty
+    if (gridWidth > 0 && gridHeight > 0) { // グリッドが空でない場合のみ実行してください。
         for (int i = 0; i < gridWidth; ++i) {
-            // Top border
+            // 上部の境界線
             if (currentMapGrid[0][i] != 2 && currentMapGrid[0][i] != 4) {
                 currentMapGrid[0][i] = 1;
             }
-            // Bottom border
+            // 下部の境界線
             if (currentMapGrid[gridHeight - 1][i] != 2 && currentMapGrid[gridHeight - 1][i] != 4) {
                 currentMapGrid[gridHeight - 1][i] = 1;
             }
         }
         for (int i = 0; i < gridHeight; ++i) {
-            // Left border
+            // 左の境界線
             if (currentMapGrid[i][0] != 2 && currentMapGrid[i][0] != 4) {
                 currentMapGrid[i][0] = 1;
             }
-            // Right border
+            // 右の境界線
             if (currentMapGrid[i][gridWidth - 1] != 2 && currentMapGrid[i][gridWidth - 1] != 4) {
                 currentMapGrid[i][gridWidth - 1] = 1;
             }
         }
     }
 
-    // 5. Spawn Enemies (Ensure Enemys array is empty - handled by destructor before new Game instance)
-    // Get S and G tile locations to identify these rooms and avoid spawning enemies in them.
+    // 5. 敵をスポーンする（敵の配列が空であることを確認 - 新しいゲームインスタンスが作成される前にデストラクタで処理される）
+    // SとGのタイル位置を取得し、これらの部屋を特定して、それらに敵をスポーンしないようにする。
     Optional<Point> startTileOpt = generator.startTile_generated;
     Optional<Point> goalTileOpt = generator.goalTile_generated;
 
     for (const auto& roomAreaRect : generator.generatedRoomAreas) {
-        // Determine if the current roomAreaRect corresponds to the Start or Goal room.
+        // 現在のroomAreaRectがStartまたはGoalの部屋に対応しているかどうかを判定します。
         bool isStartRoom = false;
         if (startTileOpt.has_value() && roomAreaRect.contains(startTileOpt.value())) {
             isStartRoom = true;
@@ -94,31 +94,31 @@ void Game::GenerateAndSetupNewMap() {
         }
 
         if (isStartRoom || isGoalRoom) {
-            continue; // Skip enemy spawning in Start or Goal rooms
+            continue; // スタートまたはゴール部屋での敵の出現をスキップする
         }
 
-        // Determine the number of enemies based on room area (width * height of the room's Rect).
+        // 部屋の面積（部屋の矩形の幅 × 高さ）に基づいて敵の数を決定します。
         int roomTileArea = roomAreaRect.w * roomAreaRect.h;
-        // Example spawning rule: 1 enemy per 25 tiles of area, max 3 enemies per room. Min 0.
+        // 例：敵の生成ルール：エリアの25タイルごとに1体の敵を生成し、1部屋あたり最大3体まで。最小0体。
         int numEnemiesToSpawn = Clamp(roomTileArea / 25, 0, 3);
 
         for (int i = 0; i < numEnemiesToSpawn; ++i) {
-            // Attempt to find a valid spawn point within the room for a limited number of tries.
+            // 部屋内で有効なスポーンポイントを探索する試みを、限られた回数で行う。
             for (int attempt = 0; attempt < 10; ++attempt) {
                 int spawnX = Random(roomAreaRect.x, roomAreaRect.x + roomAreaRect.w - 1);
                 int spawnY = Random(roomAreaRect.y, roomAreaRect.y + roomAreaRect.h - 1);
                 Point spawnPos(spawnX, spawnY);
 
-                // Check if the randomly chosen position is within the map grid bounds
-                // AND is a floor tile (type 0) in currentMapGrid.
+                // ランダムに選択された位置がマップグリッドの境界内にあるかどうかを確認する
+                // かつ、currentMapGrid内の床タイル（タイプ0）であるかどうかを確認する。
                 if (InRange(spawnPos.x, 0, currentMapGrid.width() - 1) &&
                     InRange(spawnPos.y, 0, currentMapGrid.height() - 1) &&
                     currentMapGrid[spawnPos.y][spawnPos.x] == 0) {
 
-                    Enemys << new BaseEnemy(spawnPos, 0); // Create and add new enemy (type 0)
-                    // Note: Do not change currentMapGrid[spawnPos.y][spawnPos.x] to tile type 3 (enemy).
-                    // Enemy locations are tracked via the Enemys array.
-                    break; // Successfully spawned one enemy, move to the next one (if any)
+                    Enemys << new BaseEnemy(spawnPos, 0); // 新しい敵（タイプ0）を作成して追加する
+                    // 注意：currentMapGrid[spawnPos.y][spawnPos.x]をタイルタイプ3（敵）に変更しないでください。
+                    // 敵の位置はEnemys配列で追跡されます。
+                    break; // 敵を1体生成に成功しました。次に存在する敵がいる場合、その敵に移動します。
                 }
             }
         }
