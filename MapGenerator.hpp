@@ -16,6 +16,7 @@ public:
 
 	Optional<Point> startTile_generated;
 	Optional<Point> goalTile_generated;
+	Array<Rect> generatedRoomAreas;
 
 private:
 	// 各部屋の情報を格納する構造体

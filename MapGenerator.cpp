@@ -69,6 +69,7 @@ Array<Array<char>> MapGenerator::generateMiniMap() {
 Grid<int> MapGenerator::generateFullMap(const Array<Array<char>>& miniMap) {
 	startTile_generated.reset();
 	goalTile_generated.reset();
+	this->generatedRoomAreas.clear();
 
 	Grid<int> map(MAP_SIZE, MAP_SIZE, 0); // 初期状態はすべて通れないマス（0）
 	Array<Array<Optional<Room>>> rooms(MINI_SIZE, Array<Optional<Room>>(MINI_SIZE));
@@ -104,6 +105,9 @@ Grid<int> MapGenerator::generateFullMap(const Array<Array<char>>& miniMap) {
 			for (int yy = roomRect.y; yy < roomRect.y + roomRect.h; ++yy)
 				for (int xx = roomRect.x; xx < roomRect.x + roomRect.w; ++xx)
 					map[yy][xx] = 1;
+
+			// Add the generated room's rectangle to the list
+			this->generatedRoomAreas.push_back(roomRect);
 
 			rooms[y][x] = Room{ roomRect, cell };
 		}

@@ -1,5 +1,8 @@
 ﻿# include "Game.hpp"
 
+// Define and Initialize Static Member
+short Game::s_currentStage = 0;
+
 void Game::GenerateAndSetupNewMap() {
     // 1. Generate Map Layout from MapGenerator
     auto miniMap = generator.generateMiniMap();
@@ -73,21 +76,53 @@ void Game::GenerateAndSetupNewMap() {
         }
     }
 
-    // 5. Spawn Enemies (Ensure Enemys array is empty - handled by caller during stage change)
-	/*
-    for (int y = 0; y < MapGenerator::MAP_SIZE; ++y) {
-        for (int x = 0; x < MapGenerator::MAP_SIZE; ++x) {
-            if (currentMapGrid[y][x] == 0) { // Game Floor
-                if (Random(0.05)) { // 5% chance to spawn an enemy
-                    if (Enemys.size() < 100) { // Max 100 enemies, sanity check
-                        Enemys << new BaseEnemy(Point{ x,y }, 0); // Type 0 enemy
-                        // currentMapGrid[y][x] = 3; // Mark tile as enemy - NO, keep floor as 0, draw enemy on top
-                    }
+    // 5. Spawn Enemies (Ensure Enemys array is empty - handled by destructor before new Game instance)
+    // Get S and G tile locations to identify these rooms and avoid spawning enemies in them.
+    Optional<Point> startTileOpt = generator.startTile_generated;
+    Optional<Point> goalTileOpt = generator.goalTile_generated;
+
+    for (const auto& roomAreaRect : generator.generatedRoomAreas) {
+        // Determine if the current roomAreaRect corresponds to the Start or Goal room.
+        bool isStartRoom = false;
+        if (startTileOpt.has_value() && roomAreaRect.contains(startTileOpt.value())) {
+            isStartRoom = true;
+        }
+
+        bool isGoalRoom = false;
+        if (goalTileOpt.has_value() && roomAreaRect.contains(goalTileOpt.value())) {
+            isGoalRoom = true;
+        }
+
+        if (isStartRoom || isGoalRoom) {
+            continue; // Skip enemy spawning in Start or Goal rooms
+        }
+
+        // Determine the number of enemies based on room area (width * height of the room's Rect).
+        int roomTileArea = roomAreaRect.w * roomAreaRect.h;
+        // Example spawning rule: 1 enemy per 25 tiles of area, max 3 enemies per room. Min 0.
+        int numEnemiesToSpawn = Clamp(roomTileArea / 25, 0, 3);
+
+        for (int i = 0; i < numEnemiesToSpawn; ++i) {
+            // Attempt to find a valid spawn point within the room for a limited number of tries.
+            for (int attempt = 0; attempt < 10; ++attempt) {
+                int spawnX = Random(roomAreaRect.x, roomAreaRect.x + roomAreaRect.w - 1);
+                int spawnY = Random(roomAreaRect.y, roomAreaRect.y + roomAreaRect.h - 1);
+                Point spawnPos(spawnX, spawnY);
+
+                // Check if the randomly chosen position is within the map grid bounds
+                // AND is a floor tile (type 0) in currentMapGrid.
+                if (InRange(spawnPos.x, 0, currentMapGrid.width() - 1) &&
+                    InRange(spawnPos.y, 0, currentMapGrid.height() - 1) &&
+                    currentMapGrid[spawnPos.y][spawnPos.x] == 0) {
+
+                    Enemys << new BaseEnemy(spawnPos, 0); // Create and add new enemy (type 0)
+                    // Note: Do not change currentMapGrid[spawnPos.y][spawnPos.x] to tile type 3 (enemy).
+                    // Enemy locations are tracked via the Enemys array.
+                    break; // Successfully spawned one enemy, move to the next one (if any)
                 }
             }
         }
     }
-	*/
 }
 
 
@@ -102,6 +137,19 @@ Game::Game(const InitData& init)
 	Point playerPixelPos = { (PieceSize * Player->GetPlayerPos().x) + (WallThickness * (Player->GetPlayerPos().x + 1)),
 							 (PieceSize * Player->GetPlayerPos().y) + (WallThickness * (Player->GetPlayerPos().y + 1)) };
 	camera = new Camera(playerPixelPos - Point((800 - 150) / 2, (600 - 150) / 2));
+}
+
+Game::~Game() {
+    delete Player;
+    Player = nullptr;
+
+    delete camera;
+    camera = nullptr;
+
+    for (auto* enemy : Enemys) {
+        delete enemy;
+    }
+    // Enemys.clear(); // s3d::Array clears itself
 }
 
 void Game::update()
@@ -149,23 +197,16 @@ void Game::InputMove(int _x, int _y) {
 
 	//プレイヤーがマップを進めるマスにいるか (Goal tile is 4)
 	if (currentMapGrid[Player->GetPlayerPos().y][Player->GetPlayerPos().x] == 4) {
-		NowStage++;
+		Game::s_currentStage++;
+		const int MAX_STAGES = 10; // Define max stages
 
-		if (NowStage >= 10) { // Example: Game ends after 10 stages
+		if (Game::s_currentStage >= MAX_STAGES) {
+			Game::s_currentStage = 0; // Reset for the next full game playthrough
 			changeScene(State::Title);
-			return;
+		} else {
+			changeScene(State::Game); // Reload the game scene for the next stage
 		}
-
-		// Clear existing enemies (already handled by bug fix: pointers deleted, array cleared)
-		for (auto* enemyPtr : Enemys) { // This loop should be here as per previous fix
-			delete enemyPtr;
-		}
-		Enemys.clear();
-
-		GenerateAndSetupNewMap(); // Generate and set up the new map
-
-		camera->MoveCamera(PieceSize, WallThickness, Player->GetPlayerPos());
-		return;
+		return; // Important: Stop further processing in InputMove after a scene change
 	}
 	//カメラ更新
 	camera->MoveCamera(PieceSize, WallThickness, Player->GetPlayerPos());
