@@ -111,8 +111,8 @@ void Game::GenerateAndSetupNewMap() {
 
                 // Check if the randomly chosen position is within the map grid bounds
                 // AND is a floor tile (type 0) in currentMapGrid.
-                if (s3d::InRange(spawnPos.x, 0, currentMapGrid.width() - 1) &&
-                    s3d::InRange(spawnPos.y, 0, currentMapGrid.height() - 1) &&
+                if (s3d::InRange(spawnPos.x, 0, static_cast<int>(currentMapGrid.width() - 1)) &&
+                    s3d::InRange(spawnPos.y, 0, static_cast<int>(currentMapGrid.height() - 1)) &&
                     currentMapGrid[spawnPos.y][spawnPos.x] == 0) {
 
                     Enemys << new BaseEnemy(spawnPos, 0); // Create and add new enemy (type 0)
