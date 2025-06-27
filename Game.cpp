@@ -109,10 +109,10 @@ void Game::GenerateAndSetupNewMap() {
                 int spawnY = Random(roomAreaRect.y, roomAreaRect.y + roomAreaRect.h - 1);
                 Point spawnPos(spawnX, spawnY);
 
-                // ランダムに選択された位置がマップグリッドの境界内にあるかどうかを確認する
-                // かつ、currentMapGrid内の床タイル（タイプ0）であるかどうかを確認する。
-                if (InRange(spawnPos.x, 0, currentMapGrid.width() - 1) &&
-                    InRange(spawnPos.y, 0, currentMapGrid.height() - 1) &&
+                // Check if the randomly chosen position is within the map grid bounds
+                // AND is a floor tile (type 0) in currentMapGrid.
+                if (s3d::InRange(spawnPos.x, 0, static_cast<int>(currentMapGrid.width() - 1)) &&
+                    s3d::InRange(spawnPos.y, 0, static_cast<int>(currentMapGrid.height() - 1)) &&
                     currentMapGrid[spawnPos.y][spawnPos.x] == 0) {
 
                     Enemys << new BaseEnemy(spawnPos, 0); // 新しい敵（タイプ0）を作成して追加する
