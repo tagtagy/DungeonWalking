@@ -31,7 +31,7 @@ private:
 	void GenerateAndSetupNewMap(); // Added
 
 	//マップ系
-	Grid<int32> currentMapGrid; // Will store the dynamically generated map
+	Grid<int32> currentMapGrid; // 動的に生成されたマップを保存します。
 	// 壁の厚さ
 	int WallThickness = 5;
 	//ピースのサイズ
