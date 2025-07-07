@@ -180,6 +180,17 @@ void BaseEnemy::draw(int _PieceSize, int _WallThickness, Point _camera) const {
 	}
 
 	LineString{ LineRoute }.draw(5, Palette::Red);
+
+	// Draw the enemy itself
+	if (NowHP > 0) { // Only draw if alive
+		RectF enemyBodyRect(
+			(Enemy.x * _PieceSize) + (_WallThickness * (Enemy.x + 1)) - _camera.x,
+			(Enemy.y * _PieceSize) + (_WallThickness * (Enemy.y + 1)) - _camera.y,
+			_PieceSize,
+			_PieceSize
+		);
+		enemyBodyRect.rounded(3).draw(Status.color); // Use the enemy's status color
+	}
 }
 
 void BaseEnemy::Patrol(Grid<int32>& mapData) {

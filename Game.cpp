@@ -228,7 +228,12 @@ void Game::InputMove(int _x, int _y) {
 	// A better way would be to have a separate grid for dynamic entities or store original tile.
 	for (int i = static_cast<int>(Enemys.size()) - 1; i >= 0; --i) {
 		if (Enemys[i]->GetDeath()) {
-			// Optional: currentMapGrid[Enemys[i]->GetEnemyPos().y][Enemys[i]->GetEnemyPos().x] = 0; // Set tile to floor
+			Point deadEnemyPos = Enemys[i]->GetEnemyPos();
+			// Ensure position is valid before writing to grid
+			if (s3d::InRange(deadEnemyPos.x, 0, static_cast<int>(currentMapGrid.width() - 1)) &&
+				s3d::InRange(deadEnemyPos.y, 0, static_cast<int>(currentMapGrid.height() - 1))) {
+				currentMapGrid[deadEnemyPos.y][deadEnemyPos.x] = 0; // Set tile to floor
+			}
 			delete Enemys[i];
 			Enemys.remove_at(i);
 		}
