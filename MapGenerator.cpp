@@ -3,10 +3,10 @@
 #include <queue> // For std::queue in BFS
 #include <utility> // For std::pair
 
-// L字型のパスを彫るためのヘルパー関数
-// スタティック関数であるため、MapGeneratorのインスタンスメンバーに依存しない
+// Helper function to carve L-shaped paths
+// Static because it doesn't depend on MapGenerator instance members
 static void carvePath(Grid<int>& map, Point p1, Point p2) {
-    if (RandomBool()) { // 水平方向、次に垂直方向
+    if (RandomBool()) { // Horizontal then Vertical
         for (int x = Min(p1.x, p2.x); x <= Max(p1.x, p2.x); ++x) {
             if (InRange(x, 0, MapGenerator::MAP_SIZE - 1) && InRange(p1.y, 0, MapGenerator::MAP_SIZE - 1)) {
                 map[p1.y][x] = 1;
@@ -17,7 +17,7 @@ static void carvePath(Grid<int>& map, Point p1, Point p2) {
                 map[y][p2.x] = 1;
             }
         }
-    } else { // 垂直方向、次に水平方向
+    } else { // Vertical then Horizontal
         for (int y = Min(p1.y, p2.y); y <= Max(p1.y, p2.y); ++y) {
             if (InRange(p1.x, 0, MapGenerator::MAP_SIZE - 1) && InRange(y, 0, MapGenerator::MAP_SIZE - 1)) {
                 map[y][p1.x] = 1;
@@ -33,11 +33,8 @@ static void carvePath(Grid<int>& map, Point p1, Point p2) {
 
 // ミニマップ生成処理
 Array<Array<char>> MapGenerator::generateMiniMap() {
-
-	// 初期はすべてO（空）
-	Array<Array<char>> miniMap(MINI_SIZE, Array<char>(MINI_SIZE, 'O')); 
-	// ランダムに5〜15個の部屋を作成
-	int roomCount = Random(5, 15); 
+	Array<Array<char>> miniMap(MINI_SIZE, Array<char>(MINI_SIZE, 'O')); // 初期はすべてO（空）
+	int roomCount = Random(5, 15); // ランダムに5〜15個の部屋を作成
 
 	// Rの部屋をランダムに配置
 	for (int i = 0; i < roomCount; ++i) {
@@ -133,21 +130,21 @@ Grid<int> MapGenerator::generateFullMap(const Array<Array<char>>& miniMap) {
 
 						Point c1, c2;
 
-						if (dx == 1) { // 右隣の隣人
+						if (dx == 1) { // Neighbor to the right
 							c1 = Point(current.area.x + current.area.w - 1, Random(current.area.y, current.area.y + current.area.h - 1));
 							c2 = Point(neighbor.area.x, Random(neighbor.area.y, neighbor.area.y + neighbor.area.h - 1));
-						} else if (dx == -1) { // 左隣の隣人
+						} else if (dx == -1) { // Neighbor to the left
 							c1 = Point(current.area.x, Random(current.area.y, current.area.y + current.area.h - 1));
 							c2 = Point(neighbor.area.x + neighbor.area.w - 1, Random(neighbor.area.y, neighbor.area.y + neighbor.area.h - 1));
-						} else if (dy == 1) { // 後ろの隣人
+						} else if (dy == 1) { // Neighbor below
 							c1 = Point(Random(current.area.x, current.area.x + current.area.w - 1), current.area.y + current.area.h - 1);
 							c2 = Point(Random(neighbor.area.x, neighbor.area.x + neighbor.area.w - 1), neighbor.area.y);
-						} else { // dy == -1, 前の隣人
+						} else { // dy == -1, Neighbor above
 							c1 = Point(Random(current.area.x, current.area.x + current.area.w - 1), current.area.y);
 							c2 = Point(Random(neighbor.area.x, neighbor.area.x + neighbor.area.w - 1), neighbor.area.y + neighbor.area.h - 1);
 						}
 
-						// クランプポイントを地図の境界に設定する
+						// Clamp points to map boundaries
 						c1.x = Clamp(c1.x, 0, MAP_SIZE - 1);
 						c1.y = Clamp(c1.y, 0, MAP_SIZE - 1);
 						c2.x = Clamp(c2.x, 0, MAP_SIZE - 1);
@@ -245,7 +242,7 @@ Grid<int> MapGenerator::generateFullMap(const Array<Array<char>>& miniMap) {
 
 		// 部屋の連結されていないコンポーネントが複数存在する場合、それらを接続する。
 		if (totalComponents > 1) {
-			//Console << (U"複数の部屋コンポーネントが検出されました（{}）。接続を試みます。")(totalComponents);
+			Console << Format(U"複数の部屋コンポーネントが検出されました（{}）。接続を試みます。")(totalComponents);
 			// 最初のアクティブな部屋のコンポーネントをメインコンポーネントとして指定する。
 			// (または、簡単に見分けられるならスタート部屋のコンポーネント)
 			int mainComponentID = roomComponent[0];
@@ -288,7 +285,7 @@ Grid<int> MapGenerator::generateFullMap(const Array<Array<char>>& miniMap) {
 					p2.x = Clamp(p2.x, 0, MAP_SIZE - 1); p2.y = Clamp(p2.y, 0, MAP_SIZE - 1);
 
 					carvePath(map, p1, p2); // 実際のタイルマップに経路を掘ることでそれらを接続する。
-					//Console << Format(U"Forcibly connecting room {} (comp {}) to room {} (comp {}).")(activeRooms[roomIdx1].miniMapPos, roomComponent[roomIdx1], activeRooms[roomIdx2].miniMapPos, roomComponent[roomIdx2]);
+					Console << Format(U"Forcibly connecting room {} (comp {}) to room {} (comp {}).")(activeRooms[roomIdx1].miniMapPos, roomComponent[roomIdx1], activeRooms[roomIdx2].miniMapPos, roomComponent[roomIdx2]);
 					// この簡略化されたアプローチでは、ここではroomComponent配列内のコンポーネントIDを明示的にマージしない。
 					// 物理的な経路が存在することを確認するだけ。後のS-G BFSがこれらの新しい経路を使用する。
 				}
@@ -363,7 +360,7 @@ Grid<int> MapGenerator::generateFullMap(const Array<Array<char>>& miniMap) {
 
 	if (!bfsStartPointOpt.has_value()) {
 		Console << U"Error: No passable tile found in Start ('S') room. Cannot perform BFS.";
-		// 接続が切断されているとみなされるため、強制接続を実行してください。
+		// Proceed to force connection as they are considered disconnected
 	} else {
 		Point startTile = bfsStartPointOpt.value();
 		q.push(startTile);
@@ -404,6 +401,22 @@ Grid<int> MapGenerator::generateFullMap(const Array<Array<char>>& miniMap) {
 
 		carvePath(map, sCenter, gCenter);
 	}
+
+	// --- BEGIN: Convert internal walls to floor ---
+	for (int y = 0; y < MAP_SIZE; ++y) {
+		for (int x = 0; x < MAP_SIZE; ++x) {
+			// Check if the current tile is an "internal" tile (not on the absolute border)
+			if (x > 0 && x < MAP_SIZE - 1 && y > 0 && y < MAP_SIZE - 1) {
+				// If this internal tile is currently a wall (type 0 in MapGenerator's convention)
+				if (map[y][x] == 0) {
+					map[y][x] = 1; // Convert it to a floor tile (type 1)
+				}
+			}
+			// Tiles on the border (x=0, y=0, x=MAP_SIZE-1, y=MAP_SIZE-1) that are walls (type 0)
+			// will remain walls. If they were carved as floor (type 1), they remain floor.
+		}
+	}
+	// --- END: Convert internal walls to floor ---
 
 	return map;
 }

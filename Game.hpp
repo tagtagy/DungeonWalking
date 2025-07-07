@@ -1,10 +1,9 @@
 ﻿# pragma once
-#include "Common.hpp"
+# include "Common.hpp"
 #include "Camera.hpp"
-#include"BaseEnemy.hpp"
-#include"BasePlayer.hpp"
+# include"BaseEnemy.hpp"
+# include"BasePlayer.hpp"
 #include "MapGenerator.hpp"
-#include"Particle.hpp"
 
 enum class MoveMode
 {
@@ -32,7 +31,7 @@ private:
 	void GenerateAndSetupNewMap(); // Added
 
 	//マップ系
-	Grid<int32> currentMapGrid; // 動的に生成されたマップを保存します。
+	Grid<int32> currentMapGrid; // Will store the dynamically generated map
 	// 壁の厚さ
 	int WallThickness = 5;
 	//ピースのサイズ
@@ -51,7 +50,7 @@ private:
 	const Rect MiniMessageWindow{ 700, 0, 100, 80 };
 	const Rect CharaWindow{ 650, 80, 150, 370 };
 
-	RectF getPaddle(int _x, int _y)const;
+	Rect getPaddle(int _x, int _y)const;
 
 	//////////////////////////////////
 	//キャラ
@@ -80,12 +79,20 @@ private:
 
 	// Attack Effects & Timers
 	s3d::Effect m_hitEffects;
-	s3d::Optional<Vec2> m_cameraShakeOffset;
-
+	s3d::Optional<s3d::Vec2> m_cameraShakeOffset;
 	s3d::Timer m_cameraShakeTimer{0.2s, s3d::StartImmediately::No};
-	s3d::Optional<Vec2> m_playerLungeDirection;
+	s3d::Optional<s3d::Vec2> m_playerLungeDirection; // To be used for Bump animation
+	s3d::Timer m_playerLungeTimer{0.2s, s3d::StartImmediately::No};   // Adjusted for Bump (was 0.15s for Lunge)
 
-	s3d::Timer m_playerLungeTimer{0.15s, s3d::StartImmediately::No};
+	// Continuous Movement
+	s3d::Timer m_initialMoveDelayTimer{0.4s, s3d::StartImmediately::No};
+	s3d::Timer m_moveRepeatTimer{0.12s, s3d::StartImmediately::No};
+	s3d::Optional<Point> m_heldMoveDirection;
+	bool m_isWaitingForInitialRepeat = false;
+
+	// Player Slide Animation
+	s3d::Optional<s3d::Vec2> m_playerSlideAnimDirection;
+	s3d::Timer m_playerSlideAnimTimer{0.12s, s3d::StartImmediately::No}; // Duration of slide
 
 public: // Made public for access in Game.cpp for now, can be refactored if Game class owns render consts
 	static constexpr int FullMapTileRenderSize = 8;
