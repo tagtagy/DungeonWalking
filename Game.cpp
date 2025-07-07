@@ -137,6 +137,10 @@ Game::Game(const InitData& init)
 	Point playerPixelPos = { (PieceSize * Player->GetPlayerPos().x) + (WallThickness * (Player->GetPlayerPos().x + 1)),
 							 (PieceSize * Player->GetPlayerPos().y) + (WallThickness * (Player->GetPlayerPos().y + 1)) };
 	camera = new Camera(playerPixelPos - Point((800 - 150) / 2, (600 - 150) / 2));
+
+	// Initialize hit effects
+	m_hitEffects.setSpeed(2.0);
+	m_hitEffects.setLifeTime(0.3s);
 }
 
 Game::~Game() {
@@ -167,6 +171,19 @@ void Game::update()
 	if (KeyM.down()) {
 		showFullMap = !showFullMap;
 	}
+
+	// Camera Shake Logic
+	if (m_cameraShakeTimer.isRunning()) {
+		if (m_cameraShakeTimer.reachedZero()) {
+			m_cameraShakeOffset.reset();
+		} else {
+			m_cameraShakeOffset = s3d::RandomVec2() * 3.0; // Shake magnitude
+		}
+	} else {
+		m_cameraShakeOffset.reset(); // Ensure offset is cleared
+	}
+
+	m_hitEffects.update(); // Update particle effects
 
 	if (IsMove) {
 
@@ -214,8 +231,44 @@ void Game::InputMove(int _x, int _y) {
 	//ダメージ
 	if (enemyHitPos != Point{ -1,-1 }) { // If player hit an enemy
 		for (int i = 0; i < Enemys.size(); i++) {
-			if (Enemys[i]->GetEnemyPos() == enemyHitPos) {
+			if (Enemys[i] && Enemys[i]->GetEnemyPos() == enemyHitPos) { // Added null check for Enemys[i]
 				Enemys[i]->Damage(Player->Attack());
+				m_cameraShakeTimer.restart(); // Start/Restart camera shake
+
+				// Add particles for hit effect
+                Point enemyGridPos = Enemys[i]->GetEnemyPos();
+                Vec2 enemyCenterPixelPos = Vec2{
+                    (PieceSize * enemyGridPos.x) + (WallThickness * (enemyGridPos.x + 1)) + (PieceSize / 2.0),
+                    (PieceSize * enemyGridPos.y) + (WallThickness * (enemyGridPos.y + 1)) + (PieceSize / 2.0)
+                };
+                // Adjust particle position by camera shake for consistency,
+                // so particles emit from the "shaken" visual position of the enemy.
+				// However, effects are usually in world space, not screen space affected by camera shake directly.
+				// Let's emit from the true world position. The camera shake will make the source point appear to shake.
+                // For simplicity, using the direct world position without subtracting camera offset here,
+                // as m_hitEffects.draw() will be called in screen space.
+                // The effect system usually handles its own coordinate system relative to screen or world.
+                // If particles need to be in world space and move with camera, need different handling.
+                // Assuming m_hitEffects are screen-space or handle world-to-screen internally.
+                // The position for add<> should be the screen position.
+                // We need to apply the camera offset but NOT the shake to the emission point.
+                Vec2 emissionPosOnScreen = enemyCenterPixelPos - camera->GetCamera().asVec2();
+
+
+                for (int k = 0; k < 5; ++k) {
+                    m_hitEffects.add<s3d::ParticleEffect::Triangle>(emissionPosOnScreen);
+                }
+
+				// Initiate player lunge
+				Vec2 lungeDir = (enemyHitPos.asVec2() - Player->GetPlayerPos().asVec2());
+				if (lungeDir.lengthSq() > 0) {
+					lungeDir.normalize();
+				} else {
+					lungeDir = Vec2{1,0}; // Default if somehow on same tile
+				}
+				m_playerLungeDirection = lungeDir;
+				m_playerLungeTimer.restart();
+
 				// No need to change tile on map for enemy damage/death, handled by enemy removal
 			}
 		}
@@ -296,8 +349,10 @@ void Game::draw() const
                     getPaddle(x, y).rounded(3).draw(Palette::Dimgray);
                 }
             }
-			else if (tileType == 2) getPaddle(x, y).rounded(3).draw(Palette::Green);    // Player Start (Changed to Green)
-			// else if (tileType == 3) getPaddle(x, y).rounded(3).draw(Palette::Red); // Enemy - Enemies drawn separately
+			// else if (tileType == 2) getPaddle(x, y).rounded(3).draw(Palette::Green);    // Player Start (Tile itself is Green) - Player drawn separately
+			else if (tileType == 2) { // Player Start Tile - draw as green floor, player entity on top
+				getPaddle(x,y).rounded(3).draw(Palette::Green);
+			}
 			else if (tileType == 4) getPaddle(x, y).rounded(3).draw(Palette::Yellow);  // Goal
 			else { // Default for floor if enemy was there or other unknown
 				getPaddle(x,y).rounded(3).draw(PieceColor);
@@ -308,10 +363,41 @@ void Game::draw() const
 	// Player is drawn by its own class or needs to be drawn here
 	// Player->draw(...); // Assuming BasePlayer has a draw method
 
-	//敵の移動経路 (Enemies themselves)
-	for (auto& enemy : Enemys) {
-		enemy->draw(PieceSize, WallThickness, camera->GetCamera());
+	// Explicitly draw the Player
+	if (Player) { // Ensure Player object exists
+		Point playerGridPos = Player->GetPlayerPos();
+		RectF playerBodyBase = getPaddle(playerGridPos.x, playerGridPos.y);
+
+		Vec2 lungeVisualOffset = Vec2::Zero();
+
+		if (m_playerLungeDirection.has_value() && m_playerLungeTimer.isRunning()) {
+			if (m_playerLungeTimer.reachedZero()) {
+				m_playerLungeDirection.reset();
+			} else {
+				double progress = m_playerLungeTimer.progress0_1();
+				double lungeAmplitude = Sin(progress * Math::Pi); // Smooth 0 -> 1 -> 0 curve
+				double lungeDistance = static_cast<double>(PieceSize) * 0.3;
+				lungeVisualOffset = m_playerLungeDirection.value() * lungeAmplitude * lungeDistance;
+			}
+		} else if (m_playerLungeDirection.has_value()) {
+			m_playerLungeDirection.reset(); // Cleanup if timer stopped abruptly or finished last frame
+		}
+
+		RectF playerVisualRect = playerBodyBase.movedBy(lungeVisualOffset);
+		playerVisualRect.draw(Player->GetSterts().color);
 	}
+
+	//敵の移動経路 (Enemies themselves)
+	s3d::Vec2 currentShakeVec = m_cameraShakeOffset.value_or(s3d::Vec2::Zero());
+	s3d::Point effectiveCameraPointForEnemies = camera->GetCamera() - currentShakeVec.asPoint();
+
+	for (auto& enemy : Enemys) {
+		if (enemy) { // Ensure enemy is not null
+			enemy->draw(PieceSize, WallThickness, effectiveCameraPointForEnemies); // Pass shaken camera Point
+		}
+	}
+
+	m_hitEffects.draw(); // Draw particle effects
 
 	//UI
 	{
@@ -382,10 +468,13 @@ void Game::draw() const
 	}
 }
 
-Rect Game::getPaddle(int _x, int _y)const
-{
-	return{ (PieceSize * _x) + (WallThickness * (_x + 1)) - camera->GetCamera().x,
-			(PieceSize * _y) + (WallThickness * (_y + 1)) - camera->GetCamera().y,
-			 PieceSize };
+RectF Game::getPaddle(int _x, int _y) const { // Changed return type to RectF
+    s3d::Vec2 currentShake = m_cameraShakeOffset.value_or(s3d::Vec2::Zero());
+    s3d::Vec2 baseCameraPos = camera->GetCamera().asVec2(); // camera->GetCamera() is Point
+    s3d::Vec2 effectiveCameraPos = baseCameraPos - currentShake;
+
+    return RectF{ (PieceSize * _x) + (WallThickness * (_x + 1)) - effectiveCameraPos.x,
+                  (PieceSize * _y) + (WallThickness * (_y + 1)) - effectiveCameraPos.y,
+                  static_cast<double>(PieceSize) }; // PieceSize is int, ensure double for RectF
 }
 
