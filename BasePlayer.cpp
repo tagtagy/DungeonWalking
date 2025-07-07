@@ -42,25 +42,3 @@ Point BasePlayer::Move(int _x, int _y, Grid<int32>& mapData) {
     // Indicates no move occurred (hit boundary or blocked by unhandled/wall tile type)
     return Point{ -1,-1 };
 }
-
-void BasePlayer::SetPlayerPos(Point pos) {
-	Player = pos;
-}
-
-Point BasePlayer::GetPlayerPos() const {
-	return Player;
-}
-
-int BasePlayer::Attack() {
-	return atk;
-}
-
-void BasePlayer::Damage(int damage) {
-	hp -= damage;
-	if (hp < 0)hp = 0;
-}
-
-bool BasePlayer::GetDeath() {
-	if (hp <= 0)return true;
-	return false;
-}

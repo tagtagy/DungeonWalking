@@ -242,7 +242,7 @@ Grid<int> MapGenerator::generateFullMap(const Array<Array<char>>& miniMap) {
 
 		// 部屋の連結されていないコンポーネントが複数存在する場合、それらを接続する。
 		if (totalComponents > 1) {
-			Console << Format(U"複数の部屋コンポーネントが検出されました（{}）。接続を試みます。")(totalComponents);
+			//Console << Format(U"複数の部屋コンポーネントが検出されました（{}）。接続を試みます。")(totalComponents);
 			// 最初のアクティブな部屋のコンポーネントをメインコンポーネントとして指定する。
 			// (または、簡単に見分けられるならスタート部屋のコンポーネント)
 			int mainComponentID = roomComponent[0];
@@ -285,7 +285,7 @@ Grid<int> MapGenerator::generateFullMap(const Array<Array<char>>& miniMap) {
 					p2.x = Clamp(p2.x, 0, MAP_SIZE - 1); p2.y = Clamp(p2.y, 0, MAP_SIZE - 1);
 
 					carvePath(map, p1, p2); // 実際のタイルマップに経路を掘ることでそれらを接続する。
-					Console << Format(U"Forcibly connecting room {} (comp {}) to room {} (comp {}).")(activeRooms[roomIdx1].miniMapPos, roomComponent[roomIdx1], activeRooms[roomIdx2].miniMapPos, roomComponent[roomIdx2]);
+					//Console << Format(U"Forcibly connecting room {} (comp {}) to room {} (comp {}).")(activeRooms[roomIdx1].miniMapPos, roomComponent[roomIdx1], activeRooms[roomIdx2].miniMapPos, roomComponent[roomIdx2]);
 					// この簡略化されたアプローチでは、ここではroomComponent配列内のコンポーネントIDを明示的にマージしない。
 					// 物理的な経路が存在することを確認するだけ。後のS-G BFSがこれらの新しい経路を使用する。
 				}

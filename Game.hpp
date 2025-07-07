@@ -4,6 +4,7 @@
 # include"BaseEnemy.hpp"
 # include"BasePlayer.hpp"
 #include "MapGenerator.hpp"
+#include"Particle.hpp"
 
 enum class MoveMode
 {
@@ -31,7 +32,7 @@ private:
 	void GenerateAndSetupNewMap(); // Added
 
 	//マップ系
-	Grid<int32> currentMapGrid; // Will store the dynamically generated map
+	Grid<int32> currentMapGrid; // 動的に生成されたマップを保存します。
 	// 壁の厚さ
 	int WallThickness = 5;
 	//ピースのサイズ
@@ -50,7 +51,7 @@ private:
 	const Rect MiniMessageWindow{ 700, 0, 100, 80 };
 	const Rect CharaWindow{ 650, 80, 150, 370 };
 
-	Rect getPaddle(int _x, int _y)const;
+	RectF getPaddle(int _x, int _y)const;
 
 	//////////////////////////////////
 	//キャラ
