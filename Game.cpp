@@ -1,5 +1,6 @@
 ﻿# include "Game.hpp"
 
+
 // 静的メンバーの定義と初期化
 short Game::s_currentStage = 0;
 
@@ -140,7 +141,7 @@ Game::Game(const InitData& init)
 
 	// Initialize hit effects
 	m_hitEffects.setSpeed(2.0);
-	m_hitEffects.setLifeTime(0.3s);
+	m_hitEffects.setMaxLifeTime(0.3s);
 }
 
 Game::~Game() {
@@ -198,6 +199,21 @@ void Game::update()
 		}
 	}
 
+	Vec2 lungeVisualOffset = Vec2::Zero();
+	if (m_playerLungeDirection.has_value() && m_playerLungeTimer.isRunning()) {
+		if (m_playerLungeTimer.reachedZero()) {
+			m_playerLungeDirection.reset();
+		}
+		else {
+			double progress = m_playerLungeTimer.progress0_1();
+			double lungeAmplitude = Sin(progress * Math::Pi); // Smooth 0 -> 1 -> 0 curve
+			double lungeDistance = static_cast<double>(PieceSize) * 0.3;
+			lungeVisualOffset = m_playerLungeDirection.value() * lungeAmplitude * lungeDistance;
+		}
+	}
+	else if (m_playerLungeDirection.has_value()) {
+		m_playerLungeDirection.reset(); // Cleanup if timer stopped abruptly or finished last frame
+	}
 }
 
 void Game::InputMove(int _x, int _y) {
@@ -252,15 +268,15 @@ void Game::InputMove(int _x, int _y) {
                 // Assuming m_hitEffects are screen-space or handle world-to-screen internally.
                 // The position for add<> should be the screen position.
                 // We need to apply the camera offset but NOT the shake to the emission point.
-                Vec2 emissionPosOnScreen = enemyCenterPixelPos - camera->GetCamera().asVec2();
+                Vec2 emissionPosOnScreen = enemyCenterPixelPos - camera->GetCamera();
 
 
                 for (int k = 0; k < 5; ++k) {
-                    m_hitEffects.add<s3d::ParticleEffect::Triangle>(emissionPosOnScreen);
+                    m_hitEffects.add<HitEffect>(emissionPosOnScreen);
                 }
 
 				// Initiate player lunge
-				Vec2 lungeDir = (enemyHitPos.asVec2() - Player->GetPlayerPos().asVec2());
+				Vec2 lungeDir = (enemyHitPos - Player->GetPlayerPos());
 				if (lungeDir.lengthSq() > 0) {
 					lungeDir.normalize();
 				} else {
@@ -370,18 +386,7 @@ void Game::draw() const
 
 		Vec2 lungeVisualOffset = Vec2::Zero();
 
-		if (m_playerLungeDirection.has_value() && m_playerLungeTimer.isRunning()) {
-			if (m_playerLungeTimer.reachedZero()) {
-				m_playerLungeDirection.reset();
-			} else {
-				double progress = m_playerLungeTimer.progress0_1();
-				double lungeAmplitude = Sin(progress * Math::Pi); // Smooth 0 -> 1 -> 0 curve
-				double lungeDistance = static_cast<double>(PieceSize) * 0.3;
-				lungeVisualOffset = m_playerLungeDirection.value() * lungeAmplitude * lungeDistance;
-			}
-		} else if (m_playerLungeDirection.has_value()) {
-			m_playerLungeDirection.reset(); // Cleanup if timer stopped abruptly or finished last frame
-		}
+		
 
 		RectF playerVisualRect = playerBodyBase.movedBy(lungeVisualOffset);
 		playerVisualRect.draw(Player->GetSterts().color);
@@ -397,7 +402,7 @@ void Game::draw() const
 		}
 	}
 
-	m_hitEffects.draw(); // Draw particle effects
+	m_hitEffects.update(); // Draw particle effects
 
 	//UI
 	{
@@ -470,7 +475,7 @@ void Game::draw() const
 
 RectF Game::getPaddle(int _x, int _y) const { // Changed return type to RectF
     s3d::Vec2 currentShake = m_cameraShakeOffset.value_or(s3d::Vec2::Zero());
-    s3d::Vec2 baseCameraPos = camera->GetCamera().asVec2(); // camera->GetCamera() is Point
+    s3d::Vec2 baseCameraPos = camera->GetCamera(); // camera->GetCamera() is Point
     s3d::Vec2 effectiveCameraPos = baseCameraPos - currentShake;
 
     return RectF{ (PieceSize * _x) + (WallThickness * (_x + 1)) - effectiveCameraPos.x,

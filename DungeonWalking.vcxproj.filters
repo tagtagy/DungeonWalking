@@ -154,6 +154,9 @@
     <Filter Include="Source Files\Scene">
       <UniqueIdentifier>{21578845-a5d4-4834-9274-4e27d5f1b946}</UniqueIdentifier>
     </Filter>
+    <Filter Include="Header Files\Efect">
+      <UniqueIdentifier>{fd26bac7-b484-46ae-a30b-2105bd5331f3}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="stdafx.cpp">
@@ -880,6 +883,9 @@
     </ClInclude>
     <ClInclude Include="MapGenerator.hpp">
       <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="Particle.hpp">
+      <Filter>Header Files\Efect</Filter>
     </ClInclude>
   </ItemGroup>
 </Project>

@@ -1,9 +1,10 @@
 ﻿# pragma once
-# include "Common.hpp"
+#include "Common.hpp"
 #include "Camera.hpp"
-# include"BaseEnemy.hpp"
-# include"BasePlayer.hpp"
+#include"BaseEnemy.hpp"
+#include"BasePlayer.hpp"
 #include "MapGenerator.hpp"
+#include"Particle.hpp"
 
 enum class MoveMode
 {
@@ -50,7 +51,7 @@ private:
 	const Rect MiniMessageWindow{ 700, 0, 100, 80 };
 	const Rect CharaWindow{ 650, 80, 150, 370 };
 
-	Rect getPaddle(int _x, int _y)const;
+	RectF getPaddle(int _x, int _y)const;
 
 	//////////////////////////////////
 	//キャラ
@@ -79,9 +80,11 @@ private:
 
 	// Attack Effects & Timers
 	s3d::Effect m_hitEffects;
-	s3d::Optional<s3d::Vec2> m_cameraShakeOffset;
+	s3d::Optional<Vec2> m_cameraShakeOffset;
+
 	s3d::Timer m_cameraShakeTimer{0.2s, s3d::StartImmediately::No};
-	s3d::Optional<s3d::Vec2> m_playerLungeDirection;
+	s3d::Optional<Vec2> m_playerLungeDirection;
+
 	s3d::Timer m_playerLungeTimer{0.15s, s3d::StartImmediately::No};
 
 public: // Made public for access in Game.cpp for now, can be refactored if Game class owns render consts

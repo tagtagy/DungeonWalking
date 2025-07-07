@@ -340,6 +340,7 @@
     <ClInclude Include="Game.hpp" />
     <ClInclude Include="BaseEnemy.hpp" />
     <ClInclude Include="MapGenerator.hpp" />
+    <ClInclude Include="Particle.hpp" />
     <ClInclude Include="Ranking.hpp" />
     <ClInclude Include="Save.hpp" />
     <ClInclude Include="stdafx.h" />
