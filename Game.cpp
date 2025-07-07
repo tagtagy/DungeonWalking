@@ -140,7 +140,7 @@ Game::Game(const InitData& init)
 
 	// Initialize hit effects
 	m_hitEffects.setSpeed(2.0);
-	m_hitEffects.setLifeTime(0.3s);
+	m_hitEffects.setMaxLifeTime(0.3s);
 }
 
 Game::~Game() {
@@ -297,13 +297,13 @@ void Game::InputMove(int _x, int _y) {
                     (PieceSize * enemyGridPos.x) + (WallThickness * (enemyGridPos.x + 1)) + (PieceSize / 2.0),
                     (PieceSize * enemyGridPos.y) + (WallThickness * (enemyGridPos.y + 1)) + (PieceSize / 2.0)
                 };
-                Vec2 emissionPosOnScreen = enemyCenterPixelPos - camera->GetCamera().asVec2();
+                Vec2 emissionPosOnScreen = enemyCenterPixelPos - camera->GetCamera();
                 for (int k = 0; k < 5; ++k) {
                     m_hitEffects.add<s3d::ParticleEffect::Triangle>(emissionPosOnScreen);
                 }
 
 				// Initiate player BUMP animation
-				Vec2 bumpDir = (moveResult.asVec2() - Player->GetPlayerPos().asVec2());
+				Vec2 bumpDir = (moveResult - Player->GetPlayerPos());
 				if (bumpDir.lengthSq() > 0) {
 					m_playerLungeDirection = bumpDir.normalized(); // Re-using m_playerLungeDirection for bump
 				} else {
