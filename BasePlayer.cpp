@@ -2,35 +2,65 @@
 #include "BasePlayer.hpp"
 
 BasePlayer::BasePlayer() {
-
+    // Player.x and Player.y are initialized by SetPlayerPos or default constructor of Point
 }
 
 Point BasePlayer::Move(int _x, int _y, Grid<int32>& mapData) {
-	//壁に当たっていない時
-	if (Player.x + _x >= 0 && mapData.width() > Player.x + _x &&
-		Player.y + _y >= 0 && mapData.height() > Player.y + _y) {
-		//進める所だった時
-		if (mapData[Player.y + _y][Player.x + _x] == 0) {
+    Point targetPos = Player + Point{_x, _y}; // Calculate target position
 
-			mapData[Player.y][Player.x] = 0;
-			Player += Point{ _x,  _y };
-			mapData[Player.y][Player.x] = 2;
+    // Check map boundaries
+    if (targetPos.x >= 0 && targetPos.x < mapData.width() &&
+        targetPos.y >= 0 && targetPos.y < mapData.height()) {
 
-			return Point{ -1,-1 };
-		}
-		else if (mapData[Player.y + _y][Player.x + _x] == 3) {
-			//敵が居た時
-			return Point{ Player.x + _x ,Player.y + _y };
-		}
-		else if (mapData[Player.y + _y][Player.x + _x] == 4) {
-			//ステージを進むマスだった時
-			mapData[Player.y][Player.x] = 0;
-			Player += Point{ _x,  _y };
-			mapData[Player.y][Player.x] = 2;
+        int targetTileType = mapData[targetPos.y][targetPos.x]; // Get type of the tile player wants to move to
 
-			return Point{ -2,-2 };
-		}
-	}
+        if (targetTileType == 0) { // Moving to a standard floor tile (0)
+            mapData[Player.y][Player.x] = 0;  // Set old player position on map to floor
+            Player = targetPos;               // Update player's internal position
+            mapData[Player.y][Player.x] = 2;  // Mark new player position on map as player tile (2)
+            return Point{ -1,-1 };            // Successful move, no interaction
+        }
+        else if (targetTileType == 3) { // Moving onto an enemy tile (3) - In this game, it means attacking.
+                                        // The problem description implies enemies are type 3 on the map.
+                                        // However, current enemy spawning logic doesn't set tile type 3.
+                                        // This branch might be unused if enemies are not marked on map grid.
+                                        // For now, keeping logic as specified by problem.
+            return targetPos; // Player intends to attack, does not move. Return enemy position.
+        }
+        else if (targetTileType == 4) { // Moving onto a goal tile (4)
+            mapData[Player.y][Player.x] = 0;  // Set old player position on map to floor
+            Player = targetPos;               // Update player's internal position
+            // The tile at mapData[Player.y][Player.x] (new position) remains 4 (Goal).
+            // Game::InputMove will check this tile type to trigger scene change.
+            // Game::draw will render tile 4 as yellow, and player sprite can be overlaid.
+            return Point{ -2,-2 };            // Signal that goal was reached
+        }
+        // If targetTileType is 1 (wall) or any other non-explicitly handled type (e.g. 2 if somehow trying to move onto self), movement is blocked.
+        // No change in player position or mapData needed for blocked moves.
+    }
 
-	return Point{ -1,-1 };
+    // Indicates no move occurred (hit boundary or blocked by unhandled/wall tile type)
+    return Point{ -1,-1 };
+}
+
+void BasePlayer::SetPlayerPos(Point pos) {
+	Player = pos;
+}
+
+Point BasePlayer::GetPlayerPos() const {
+	return Player;
+}
+
+int BasePlayer::Attack() {
+	return atk;
+}
+
+void BasePlayer::Damage(int damage) {
+	hp -= damage;
+	if (hp < 0)hp = 0;
+}
+
+bool BasePlayer::GetDeath() {
+	if (hp <= 0)return true;
+	return false;
 }
