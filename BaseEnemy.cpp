@@ -1,5 +1,55 @@
 ﻿#include "stdafx.h"
 #include "BaseEnemy.hpp"
+// #include <cmath> // For std::abs, std::round - Siv3D provides s3d::Abs, s3d::Max
+
+// Static helper function for Line-of-Sight check
+static bool HasLineOfSight(Point p1, Point p2, const Grid<int32>& mapData) {
+    int x1 = p1.x;
+    int y1 = p1.y;
+    int x2 = p2.x;
+    int y2 = p2.y;
+
+    int dx = x2 - x1;
+    int dy = y2 - y1;
+
+    int steps = s3d::Max(s3d::Abs(dx), s3d::Abs(dy));
+
+    if (steps == 0) { // Points are identical
+        return true;
+    }
+
+    double xIncrement = static_cast<double>(dx) / steps;
+    double yIncrement = static_cast<double>(dy) / steps;
+
+    double currentX = x1 + xIncrement; // Start checking from the next cell towards p2
+    double currentY = y1 + yIncrement;
+
+    for (int i = 0; i < steps; ++i) {
+        int cellX = static_cast<int>(currentX); // Using static_cast<int> which truncates like floor for positive numbers
+        int cellY = static_cast<int>(currentY); // For negative, it truncates towards zero.
+                                             // Consider s3d::Floor if behavior needs to be strictly floor.
+                                             // For grid indices, simple truncation is often what's intended with DDA.
+
+        if (cellX == x2 && cellY == y2) {
+            break; // Reached destination cell, path is clear up to it.
+        }
+
+        if (!s3d::InRange(cellX, 0, static_cast<int>(mapData.width() - 1)) ||
+            !s3d::InRange(cellY, 0, static_cast<int>(mapData.height() - 1))) {
+            return false; // Line goes out of bounds, effectively blocked.
+        }
+
+        if (mapData[cellY][cellX] == 1) { // Assuming 1 is wall tile type
+            return false; // LOS is blocked by a wall.
+        }
+
+        currentX += xIncrement;
+        currentY += yIncrement;
+    }
+
+    return true; // No obstructions found along the line up to (but not including) the target cell.
+}
+
 
 // コンストラクタ
 BaseEnemy::BaseEnemy(Point _pos, int _ID) {
@@ -31,7 +81,7 @@ int BaseEnemy::Move(Point _Player, Grid<int32>& mapData) {
 	}
 
 	// 索敵範囲内 → 追跡開始
-	if (distance <= SearchRange) {
+	if (distance <= SearchRange && HasLineOfSight(Enemy, _Player, mapData)) {
 		EnemyStateMachine = EnemyState::CHASE;
 		++ChaseCount;
 
