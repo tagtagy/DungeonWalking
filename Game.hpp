@@ -76,6 +76,14 @@ private:
 
 	// Full map display toggle
 	bool showFullMap = false;
+
+	// Attack Effects & Timers
+	s3d::Effect m_hitEffects;
+	s3d::Optional<s3d::Vec2> m_cameraShakeOffset;
+	s3d::Timer m_cameraShakeTimer{0.2s, s3d::StartImmediately::No};
+	s3d::Optional<s3d::Vec2> m_playerLungeDirection;
+	s3d::Timer m_playerLungeTimer{0.15s, s3d::StartImmediately::No};
+
 public: // Made public for access in Game.cpp for now, can be refactored if Game class owns render consts
 	static constexpr int FullMapTileRenderSize = 8;
 };
