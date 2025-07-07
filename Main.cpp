@@ -15,7 +15,7 @@ void Main()
 	manager.add<Game>(State::Game);
 	manager.add<Ranking>(State::Ranking);
 
-	//manager.init(State::Game);
+	manager.init(State::Game);
 
 	while (System::Update())
 	{

@@ -1,28 +1,27 @@
 ﻿# include "Game.hpp"
 
-
-// 静的メンバーの定義と初期化
+// Define and Initialize Static Member
 short Game::s_currentStage = 0;
 
 void Game::GenerateAndSetupNewMap() {
-    // 1. MapGeneratorから地図レイアウトを生成する
+    // 1. Generate Map Layout from MapGenerator
     auto miniMap = generator.generateMiniMap();
     auto generatedLayout = generator.generateFullMap(miniMap); // Grid<int>
 
-    // 2. currentMapGrid を初期化します。
+    // 2. Initialize currentMapGrid
     currentMapGrid.resize(MapGenerator::MAP_SIZE, MapGenerator::MAP_SIZE);
 
-    // 3. 生成されたレイアウトを現在のマップグリッドに適用し、SタイルとGタイルを特定する。
+    // 3. Adapt generatedLayout to currentMapGrid and identify S and G tiles
     if (!generator.startTile_generated.has_value() || !generator.goalTile_generated.has_value()) {
         Console << U"Error: MapGenerator did not set start or goal tile.";
-        // フォールバックまたはエラー状態を考慮する
-        // 現在は、デフォルトの小さなマップを生成するか、終了する
-        // この例では、生成が重大なエラーで失敗した場合、非常にシンプルなフォールバックマップを作成する
+        // Consider a fallback or error state
+        // For now, try to generate a default small map or exit
+        // This example will just create a very simple fallback map if generation fails critically
         currentMapGrid.assign(MapGenerator::MAP_SIZE, MapGenerator::MAP_SIZE, 1); // All walls
-        currentMapGrid[1][1] = 2; // プレイヤー開始
-        currentMapGrid[1][2] = 4; // ゴール
+        currentMapGrid[1][1] = 2; // Player start
+        currentMapGrid[1][2] = 4; // Goal
         Player->SetPlayerPos(Point{1,1});
-        // リトライシナリオにおいて、この時点以前に追加された敵がいる場合、任意でそれらを消去する。
+        // Optionally clear enemies if any were added before this point in a retry scenario
         for (auto* enemy : Enemys) { delete enemy; }
         Enemys.clear();
         return;
@@ -47,43 +46,43 @@ void Game::GenerateAndSetupNewMap() {
         }
     }
 
-    // 4. プレイヤーの位置を設定する
+    // 4. Set Player Position
     Player->SetPlayerPos(playerStartPos);
 
-    // マップの境界線は壁である必要があります。ただし、スタートタイルまたはゴールタイルである場合は除きます。
+    // Ensure map borders are walls, unless it's a Start or Goal tile
     int gridWidth = currentMapGrid.width();
     int gridHeight = currentMapGrid.height();
 
-    if (gridWidth > 0 && gridHeight > 0) { // グリッドが空でない場合のみ実行してください。
+    if (gridWidth > 0 && gridHeight > 0) { // Proceed only if grid is not empty
         for (int i = 0; i < gridWidth; ++i) {
-            // 上部の境界線
+            // Top border
             if (currentMapGrid[0][i] != 2 && currentMapGrid[0][i] != 4) {
                 currentMapGrid[0][i] = 1;
             }
-            // 下部の境界線
+            // Bottom border
             if (currentMapGrid[gridHeight - 1][i] != 2 && currentMapGrid[gridHeight - 1][i] != 4) {
                 currentMapGrid[gridHeight - 1][i] = 1;
             }
         }
         for (int i = 0; i < gridHeight; ++i) {
-            // 左の境界線
+            // Left border
             if (currentMapGrid[i][0] != 2 && currentMapGrid[i][0] != 4) {
                 currentMapGrid[i][0] = 1;
             }
-            // 右の境界線
+            // Right border
             if (currentMapGrid[i][gridWidth - 1] != 2 && currentMapGrid[i][gridWidth - 1] != 4) {
                 currentMapGrid[i][gridWidth - 1] = 1;
             }
         }
     }
 
-    // 5. 敵をスポーンする（敵の配列が空であることを確認 - 新しいゲームインスタンスが作成される前にデストラクタで処理される）
-    // SとGのタイル位置を取得し、これらの部屋を特定して、それらに敵をスポーンしないようにする。
+    // 5. Spawn Enemies (Ensure Enemys array is empty - handled by destructor before new Game instance)
+    // Get S and G tile locations to identify these rooms and avoid spawning enemies in them.
     Optional<Point> startTileOpt = generator.startTile_generated;
     Optional<Point> goalTileOpt = generator.goalTile_generated;
 
     for (const auto& roomAreaRect : generator.generatedRoomAreas) {
-        // 現在のroomAreaRectがStartまたはGoalの部屋に対応しているかどうかを判定します。
+        // Determine if the current roomAreaRect corresponds to the Start or Goal room.
         bool isStartRoom = false;
         if (startTileOpt.has_value() && roomAreaRect.contains(startTileOpt.value())) {
             isStartRoom = true;
@@ -95,16 +94,16 @@ void Game::GenerateAndSetupNewMap() {
         }
 
         if (isStartRoom || isGoalRoom) {
-            continue; // スタートまたはゴール部屋での敵の出現をスキップする
+            continue; // Skip enemy spawning in Start or Goal rooms
         }
 
-        // 部屋の面積（部屋の矩形の幅 × 高さ）に基づいて敵の数を決定します。
+        // Determine the number of enemies based on room area (width * height of the room's Rect).
         int roomTileArea = roomAreaRect.w * roomAreaRect.h;
-        // 例：敵の生成ルール：エリアの25タイルごとに1体の敵を生成し、1部屋あたり最大3体まで。最小0体。
+        // Example spawning rule: 1 enemy per 25 tiles of area, max 3 enemies per room. Min 0.
         int numEnemiesToSpawn = Clamp(roomTileArea / 25, 0, 3);
 
         for (int i = 0; i < numEnemiesToSpawn; ++i) {
-            // 部屋内で有効なスポーンポイントを探索する試みを、限られた回数で行う。
+            // Attempt to find a valid spawn point within the room for a limited number of tries.
             for (int attempt = 0; attempt < 10; ++attempt) {
                 int spawnX = Random(roomAreaRect.x, roomAreaRect.x + roomAreaRect.w - 1);
                 int spawnY = Random(roomAreaRect.y, roomAreaRect.y + roomAreaRect.h - 1);
@@ -116,10 +115,10 @@ void Game::GenerateAndSetupNewMap() {
                     s3d::InRange(spawnPos.y, 0, static_cast<int>(currentMapGrid.height() - 1)) &&
                     currentMapGrid[spawnPos.y][spawnPos.x] == 0) {
 
-                    Enemys << new BaseEnemy(spawnPos, 0); // 新しい敵（タイプ0）を作成して追加する
-                    // 注意：currentMapGrid[spawnPos.y][spawnPos.x]をタイルタイプ3（敵）に変更しないでください。
-                    // 敵の位置はEnemys配列で追跡されます。
-                    break; // 敵を1体生成に成功しました。次に存在する敵がいる場合、その敵に移動します。
+                    Enemys << new BaseEnemy(spawnPos, 0); // Create and add new enemy (type 0)
+                    // Note: Do not change currentMapGrid[spawnPos.y][spawnPos.x] to tile type 3 (enemy).
+                    // Enemy locations are tracked via the Enemys array.
+                    break; // Successfully spawned one enemy, move to the next one (if any)
                 }
             }
         }
@@ -141,7 +140,7 @@ Game::Game(const InitData& init)
 
 	// Initialize hit effects
 	m_hitEffects.setSpeed(2.0);
-	m_hitEffects.setMaxLifeTime(0.3s);
+	m_hitEffects.setLifeTime(0.3s);
 }
 
 Game::~Game() {
@@ -159,17 +158,67 @@ Game::~Game() {
 
 void Game::update()
 {
-	if (KeyNum1.down()) InputMove(-1,  1);
-	if (KeyNum2.down()) InputMove( 0,  1);
-	if (KeyNum3.down()) InputMove( 1,  1);
-	if (KeyNum4.down()) InputMove(-1,  0);
-	if (KeyNum5.down()) InputMove( 0,  0);
-	if (KeyNum6.down()) InputMove( 1,  0);
-	if (KeyNum7.down()) InputMove(-1, -1);
-	if (KeyNum8.down()) InputMove( 0, -1);
-	if (KeyNum9.down()) InputMove( 1, -1);
+	// --- Continuous Movement Logic ---
+	const Array<std::pair<s3d::InputGroup, Point>> moveInputs = {
+		{KeyNum1, {-1, 1}}, {KeyNum2, {0, 1}}, {KeyNum3, {1, 1}},
+		{KeyNum4, {-1, 0}}, /* KeyNum5 is no move */ {KeyNum6, {1, 0}},
+		{KeyNum7, {-1,-1}}, {KeyNum8, {0,-1}}, {KeyNum9, {1,-1}}
+	};
 
-	if (KeyM.down()) {
+	Optional<Point> currentPressedDir;
+	bool newKeyDown = false;
+
+	for (const auto& inputPair : moveInputs) {
+		if (inputPair.first.down()) {
+			currentPressedDir = inputPair.second;
+			newKeyDown = true;
+			break; // Prioritize new key presses
+		}
+		if (inputPair.first.pressed() && !currentPressedDir.has_value()) {
+			// If no new key was pressed down, check for any currently held key
+			currentPressedDir = inputPair.second;
+		}
+	}
+
+	// Handle KeyNum5 (no move, but might interrupt held movement)
+	if (KeyNum5.down()) {
+		m_heldMoveDirection.reset();
+		m_isWaitingForInitialRepeat = false;
+		m_initialMoveDelayTimer.pause();
+		m_moveRepeatTimer.pause();
+		InputMove(0,0); // Explicitly call InputMove for "wait" turn
+        // Reset currentPressedDir to avoid processing hold logic if a move key is also held
+        currentPressedDir.reset();
+	}
+
+
+	if (newKeyDown && currentPressedDir.has_value()) { // A move key was just pressed (and it's not KeyNum5)
+		InputMove(currentPressedDir.value().x, currentPressedDir.value().y);
+		m_heldMoveDirection = currentPressedDir;
+		m_initialMoveDelayTimer.restart();
+		m_isWaitingForInitialRepeat = true;
+		m_moveRepeatTimer.pause();
+	} else if (currentPressedDir.has_value() && m_heldMoveDirection.has_value() && currentPressedDir.value() == m_heldMoveDirection.value()) {
+		// The same key that initiated the hold is still being pressed
+		if (m_isWaitingForInitialRepeat) {
+			if (m_initialMoveDelayTimer.reachedZero()) {
+				InputMove(m_heldMoveDirection.value().x, m_heldMoveDirection.value().y);
+				m_isWaitingForInitialRepeat = false;
+				m_moveRepeatTimer.restart();
+			}
+		} else if (m_moveRepeatTimer.reachedZero()) {
+			InputMove(m_heldMoveDirection.value().x, m_heldMoveDirection.value().y);
+			m_moveRepeatTimer.restart();
+		}
+	} else { // No move key is being pressed, or a different key is pressed (breaking the hold)
+		m_heldMoveDirection.reset();
+		m_isWaitingForInitialRepeat = false;
+		m_initialMoveDelayTimer.pause();
+		m_moveRepeatTimer.pause();
+	}
+	// --- End Continuous Movement Logic ---
+
+	if (KeyM.down()) { // M key for map toggle is separate
 		showFullMap = !showFullMap;
 	}
 
@@ -199,37 +248,27 @@ void Game::update()
 		}
 	}
 
-	Vec2 lungeVisualOffset = Vec2::Zero();
-	if (m_playerLungeDirection.has_value() && m_playerLungeTimer.isRunning()) {
-		if (m_playerLungeTimer.reachedZero()) {
-			m_playerLungeDirection.reset();
-		}
-		else {
-			double progress = m_playerLungeTimer.progress0_1();
-			double lungeAmplitude = Sin(progress * Math::Pi); // Smooth 0 -> 1 -> 0 curve
-			double lungeDistance = static_cast<double>(PieceSize) * 0.3;
-			lungeVisualOffset = m_playerLungeDirection.value() * lungeAmplitude * lungeDistance;
-		}
-	}
-	else if (m_playerLungeDirection.has_value()) {
-		m_playerLungeDirection.reset(); // Cleanup if timer stopped abruptly or finished last frame
-	}
 }
 
 void Game::InputMove(int _x, int _y) {
 
-	IsMove = true;
+	IsMove = true; // Mark that a move/action is happening
 
-	Array<Point>enemyPoss;
+	Point oldPlayerPos = Player->GetPlayerPos(); // Store old position for slide animation
+
+	Array<Point>enemyPoss; // This seems unused, consider removing if not used later.
 	for (auto& enemy : Enemys) {
 		enemyPoss << enemy->GetEnemyPos();
 	}
 
 	//プレイヤー移動
-	Point enemyHitPos = Player->Move(_x, _y, currentMapGrid); // Use currentMapGrid
+	Point moveResult = Player->Move(_x, _y, currentMapGrid); // Use currentMapGrid, store result
+
+	Point newPlayerPos = Player->GetPlayerPos(); // Get new position after Player->Move()
+	bool playerMovedLogically = (newPlayerPos != oldPlayerPos);
 
 	//プレイヤーがマップを進めるマスにいるか (Goal tile is 4)
-	if (currentMapGrid[Player->GetPlayerPos().y][Player->GetPlayerPos().x] == 4) {
+	if (newPlayerPos.y < currentMapGrid.height() && newPlayerPos.x < currentMapGrid.width() && currentMapGrid[newPlayerPos.y][newPlayerPos.x] == 4) {
 		Game::s_currentStage++;
 		const int MAX_STAGES = 10; // Define max stages
 
@@ -244,51 +283,78 @@ void Game::InputMove(int _x, int _y) {
 	//カメラ更新
 	camera->MoveCamera(PieceSize, WallThickness, Player->GetPlayerPos());
 
-	//ダメージ
-	if (enemyHitPos != Point{ -1,-1 }) { // If player hit an enemy
+	//ダメージ & Attack Animations
+	// moveResult contains enemyHitPos if an attack occurred.
+	if (moveResult.x != -1 && moveResult.y != -2 && moveResult != Player->GetPlayerPos() ) { // Player attempted to move onto an enemy tile
+		bool enemyHit = false;
 		for (int i = 0; i < Enemys.size(); i++) {
-			if (Enemys[i] && Enemys[i]->GetEnemyPos() == enemyHitPos) { // Added null check for Enemys[i]
+			if (Enemys[i] && Enemys[i]->GetEnemyPos() == moveResult) {
 				Enemys[i]->Damage(Player->Attack());
-				m_cameraShakeTimer.restart(); // Start/Restart camera shake
+				m_cameraShakeTimer.restart();
 
-				// Add particles for hit effect
                 Point enemyGridPos = Enemys[i]->GetEnemyPos();
                 Vec2 enemyCenterPixelPos = Vec2{
                     (PieceSize * enemyGridPos.x) + (WallThickness * (enemyGridPos.x + 1)) + (PieceSize / 2.0),
                     (PieceSize * enemyGridPos.y) + (WallThickness * (enemyGridPos.y + 1)) + (PieceSize / 2.0)
                 };
-                // Adjust particle position by camera shake for consistency,
-                // so particles emit from the "shaken" visual position of the enemy.
-				// However, effects are usually in world space, not screen space affected by camera shake directly.
-				// Let's emit from the true world position. The camera shake will make the source point appear to shake.
-                // For simplicity, using the direct world position without subtracting camera offset here,
-                // as m_hitEffects.draw() will be called in screen space.
-                // The effect system usually handles its own coordinate system relative to screen or world.
-                // If particles need to be in world space and move with camera, need different handling.
-                // Assuming m_hitEffects are screen-space or handle world-to-screen internally.
-                // The position for add<> should be the screen position.
-                // We need to apply the camera offset but NOT the shake to the emission point.
-                Vec2 emissionPosOnScreen = enemyCenterPixelPos - camera->GetCamera();
-
-
+                Vec2 emissionPosOnScreen = enemyCenterPixelPos - camera->GetCamera().asVec2();
                 for (int k = 0; k < 5; ++k) {
-                    m_hitEffects.add<HitEffect>(emissionPosOnScreen);
+                    m_hitEffects.add<s3d::ParticleEffect::Triangle>(emissionPosOnScreen);
                 }
 
-				// Initiate player lunge
-				Vec2 lungeDir = (enemyHitPos - Player->GetPlayerPos());
-				if (lungeDir.lengthSq() > 0) {
-					lungeDir.normalize();
+				// Initiate player BUMP animation
+				Vec2 bumpDir = (moveResult.asVec2() - Player->GetPlayerPos().asVec2());
+				if (bumpDir.lengthSq() > 0) {
+					m_playerLungeDirection = bumpDir.normalized(); // Re-using m_playerLungeDirection for bump
 				} else {
-					lungeDir = Vec2{1,0}; // Default if somehow on same tile
+					// Fallback if positions are same, use input _x, _y
+					Vec2 inputDir = Vec2{static_cast<double>(_x), static_cast<double>(_y)};
+					if (inputDir.lengthSq() > 0) m_playerLungeDirection = inputDir.normalized();
+					else m_playerLungeDirection = Vec2{1,0};
 				}
-				m_playerLungeDirection = lungeDir;
-				m_playerLungeTimer.restart();
+				m_playerLungeTimer.restart(); // Re-using m_playerLungeTimer for bump
 
-				// No need to change tile on map for enemy damage/death, handled by enemy removal
+				// Ensure slide animation is stopped
+				m_playerSlideAnimDirection.reset();
+				m_playerSlideAnimTimer.pause();
+				enemyHit = true;
+				break;
 			}
 		}
+		if (!enemyHit) { // Player bumped a non-enemy, non-floor tile (e.g. wall)
+			// Potentially trigger a different bump/wall hit animation here if desired
+			// For now, just ensure slide is reset if the move wasn't to an empty tile
+			m_playerSlideAnimDirection.reset();
+			m_playerSlideAnimTimer.pause();
+		}
+	} else if (playerMovedLogically && (moveResult.x == -1 && moveResult.y == -1)) {
+		// Successful move to an empty tile (SLIDE ANIMATION)
+		if ((_x != 0 || _y != 0)) {
+			Vec2 moveDirVec = Vec2{static_cast<double>(_x), static_cast<double>(_y)};
+			if (moveDirVec.lengthSq() > 0) {
+				m_playerSlideAnimDirection = moveDirVec.normalized();
+			} else {
+				m_playerSlideAnimDirection.reset();
+			}
+
+			if (m_playerSlideAnimDirection.has_value()) {
+				m_playerSlideAnimTimer.restart();
+				m_playerLungeDirection.reset();
+				m_playerLungeTimer.pause();
+			}
+		} else {
+			m_playerSlideAnimDirection.reset();
+			m_playerSlideAnimTimer.pause();
+		}
+	} else if (!(moveResult.x == -2 && moveResult.y == -2)) {
+		// Catch-all for other non-move, non-goal scenarios (e.g. bumping a wall if not handled above)
+		m_playerSlideAnimDirection.reset();
+		m_playerSlideAnimTimer.pause();
+		m_playerLungeDirection.reset();
+		m_playerLungeTimer.pause();
 	}
+	// Note: If it was a goal move (moveResult == {-2,-2}), a scene change occurs,
+	// so no animation state needs to be reset here for the current scene instance.
 
 	//敵の生存確認 & remove dead enemies
 	// When an enemy dies, its tile should revert to floor (0)
@@ -383,12 +449,41 @@ void Game::draw() const
 	if (Player) { // Ensure Player object exists
 		Point playerGridPos = Player->GetPlayerPos();
 		RectF playerBodyBase = getPaddle(playerGridPos.x, playerGridPos.y);
+		Vec2 finalVisualOffset = Vec2::Zero();
 
-		Vec2 lungeVisualOffset = Vec2::Zero();
+		// Player Bump (Attack) Animation - takes precedence
+		if (m_playerLungeDirection.has_value() && m_playerLungeTimer.isRunning()) {
+			if (m_playerLungeTimer.reachedZero()) {
+				m_playerLungeDirection.reset();
+			} else {
+				double progress = m_playerLungeTimer.progress0_1(); // 0.0 to 1.0
+				double bounceAmplitude = 0.0;
+				if (progress < 0.5) { // First half: move towards enemy
+					bounceAmplitude = progress * 2.0; // Scales 0.0 -> 0.5 progress to 0.0 -> 1.0 amplitude
+				} else { // Second half: move back to original tile
+					bounceAmplitude = (1.0 - progress) * 2.0; // Scales 0.5 -> 1.0 progress to 1.0 -> 0.0 amplitude
+				}
+				double maxBumpDistance = static_cast<double>(PieceSize) * 0.4; // Bump 40% of a tile's width
+				finalVisualOffset = m_playerLungeDirection.value() * bounceAmplitude * maxBumpDistance;
+			}
+		} else if (m_playerLungeDirection.has_value()) {
+			m_playerLungeDirection.reset(); // Timer not running, reset stale direction
+		}
+		// Player Slide (Move) Animation - only if bump is not active
+		else if (m_playerSlideAnimDirection.has_value() && m_playerSlideAnimTimer.isRunning()) {
+			if (m_playerSlideAnimTimer.reachedZero()) {
+				m_playerSlideAnimDirection.reset(); // Animation finished
+			} else {
+				double progress = m_playerSlideAnimTimer.progress0_1(); // 0.0 (start) to 1.0 (end)
+				double slideAmount = (1.0 - progress) * static_cast<double>(PieceSize);
+				finalVisualOffset = -m_playerSlideAnimDirection.value() * slideAmount;
+			}
+		} else if (m_playerSlideAnimDirection.has_value()) { // Timer not running, cleanup stale direction
+			m_playerSlideAnimDirection.reset();
+		}
+		// If no animation is active, finalVisualOffset remains Vec2::Zero().
 
-		
-
-		RectF playerVisualRect = playerBodyBase.movedBy(lungeVisualOffset);
+		RectF playerVisualRect = playerBodyBase.movedBy(finalVisualOffset);
 		playerVisualRect.draw(Player->GetSterts().color);
 	}
 
@@ -402,7 +497,7 @@ void Game::draw() const
 		}
 	}
 
-	m_hitEffects.update(); // Draw particle effects
+	m_hitEffects.draw(); // Draw particle effects
 
 	//UI
 	{
@@ -475,7 +570,7 @@ void Game::draw() const
 
 RectF Game::getPaddle(int _x, int _y) const { // Changed return type to RectF
     s3d::Vec2 currentShake = m_cameraShakeOffset.value_or(s3d::Vec2::Zero());
-    s3d::Vec2 baseCameraPos = camera->GetCamera(); // camera->GetCamera() is Point
+    s3d::Vec2 baseCameraPos = camera->GetCamera().asVec2(); // camera->GetCamera() is Point
     s3d::Vec2 effectiveCameraPos = baseCameraPos - currentShake;
 
     return RectF{ (PieceSize * _x) + (WallThickness * (_x + 1)) - effectiveCameraPos.x,
