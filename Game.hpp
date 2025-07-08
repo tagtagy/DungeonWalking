@@ -1,4 +1,4 @@
-﻿# pragma once
+﻿# pragma once﻿
 # include "Common.hpp"
 #include "Camera.hpp"
 # include"BaseEnemy.hpp"
@@ -68,11 +68,9 @@ private:
 
 
 	BasePlayer* Player = nullptr;
-	bool IsMove = false;
-	MoveMode Move;
 
 	Array<BaseEnemy*> Enemys;
-	
+
 	Camera* camera = nullptr;
 
 	// Full map display toggle
@@ -81,19 +79,20 @@ private:
 	// Attack Effects & Timers
 	s3d::Effect m_hitEffects;
 	s3d::Optional<s3d::Vec2> m_cameraShakeOffset;
-	s3d::Timer m_cameraShakeTimer{0.2s, s3d::StartImmediately::No};
+	s3d::Timer m_cameraShakeTimer{ 0.2s, s3d::StartImmediately::No };
 	s3d::Optional<s3d::Vec2> m_playerLungeDirection; // To be used for Bump animation
-	s3d::Timer m_playerLungeTimer{0.2s, s3d::StartImmediately::No};   // Adjusted for Bump (was 0.15s for Lunge)
+	s3d::Timer m_playerLungeTimer{ 0.2s, s3d::StartImmediately::No };   // Adjusted for Bump (was 0.15s for Lunge)
 
 	// Continuous Movement
-	s3d::Timer m_initialMoveDelayTimer{0.4s, s3d::StartImmediately::No};
-	s3d::Timer m_moveRepeatTimer{0.12s, s3d::StartImmediately::No};
+	s3d::Timer m_initialMoveDelayTimer{ 0.4s, s3d::StartImmediately::No };
+	s3d::Timer m_moveRepeatTimer{ 0.12s, s3d::StartImmediately::No };
 	s3d::Optional<Point> m_heldMoveDirection;
 	bool m_isWaitingForInitialRepeat = false;
+	bool m_isAttackIntent = false; // Added for controlling attack on initial press
 
 	// Player Slide Animation
 	s3d::Optional<s3d::Vec2> m_playerSlideAnimDirection;
-	s3d::Timer m_playerSlideAnimTimer{0.12s, s3d::StartImmediately::No}; // Duration of slide
+	s3d::Timer m_playerSlideAnimTimer{ 0.12s, s3d::StartImmediately::No }; // Duration of slide
 
 public: // Made public for access in Game.cpp for now, can be refactored if Game class owns render consts
 	static constexpr int FullMapTileRenderSize = 8;

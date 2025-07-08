@@ -16,7 +16,7 @@ struct HitEffect : IEffect
 	bool update(double t) override
 	{
 		// 時間に応じて大きくなる輪を描く
-		Circle{ m_pos, (t * 100) }.drawFrame(4, m_color);
+		Circle{ m_pos, (t * 100) }.drawFrame(10, m_color);
 
 		// 1 秒未満なら継続する
 		return (t < 1.0);

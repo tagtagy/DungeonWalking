@@ -36,49 +36,52 @@ void Game::GenerateAndSetupNewMap() {
 				currentMapGrid[y][x] = 2; // Player Start
 			}
 			else if (Point(x, y) == goalPos) {
-				currentMapGrid[y][x] = 4; // Goal
+				currentMapGrid[y][x] = 4; // Goal (Passable, Yellow)
 			}
-			else if (generatedLayout[y][x] == 0) { // MapGenerator Wall (assuming 0 is wall from generator)
-				currentMapGrid[y][x] = 1; // Game Wall
+			else if (generatedLayout[y][x] == 0) { // MapGenerator Wall
+				currentMapGrid[y][x] = 0; // Game Wall (Passable: No, Draw: No)
 			}
-			else if (generatedLayout[y][x] == 1) { // MapGenerator Floor (assuming 1 is floor from generator)
-				currentMapGrid[y][x] = 0; // Game Floor
+			else if (generatedLayout[y][x] == 1) { // MapGenerator Floor/Path
+				currentMapGrid[y][x] = 1; // Game Floor (Passable: Yes, Draw: PieceColor)
 			}
-			else {
-				currentMapGrid[y][x] = 1; // Default to wall if unknown tile from generator
+			else { // Should not happen
+				currentMapGrid[y][x] = 0; // Default to Game Wall
 			}
 		}
 	}
 
 	// 4. プレイヤーの位置を設定する
 	Player->SetPlayerPos(playerStartPos);
+	// Ensure player's starting tile is marked as player start, not overwritten by debug
+	currentMapGrid[playerStartPos.y][playerStartPos.x] = 2;
 
-	// マップの境界線は壁である必要があります。ただし、スタートタイルまたはゴールタイルである場合は除きます。
-	int gridWidth = currentMapGrid.width();
-	int gridHeight = currentMapGrid.height();
 
-	if (gridWidth > 0 && gridHeight > 0) { // グリッドが空でない場合のみ実行してください。
-		for (int i = 0; i < gridWidth; ++i) {
-			// 上部の境界線
-			if (currentMapGrid[0][i] != 2 && currentMapGrid[0][i] != 4) {
-				currentMapGrid[0][i] = 1;
-			}
-			// 下部の境界線
-			if (currentMapGrid[gridHeight - 1][i] != 2 && currentMapGrid[gridHeight - 1][i] != 4) {
-				currentMapGrid[gridHeight - 1][i] = 1;
-			}
-		}
-		for (int i = 0; i < gridHeight; ++i) {
-			// 左の境界線
-			if (currentMapGrid[i][0] != 2 && currentMapGrid[i][0] != 4) {
-				currentMapGrid[i][0] = 1;
-			}
-			// 右の境界線
-			if (currentMapGrid[i][gridWidth - 1] != 2 && currentMapGrid[i][gridWidth - 1] != 4) {
-				currentMapGrid[i][gridWidth - 1] = 1;
+	// --- BEGIN DEBUG: Mark generated room areas for visualization ---
+	const int DEBUG_ROOM_TILE_ID = 5; // Passable: Yes, Draw: Magenta
+	if (not generator.generatedRoomAreas.isEmpty()) {
+		for (const auto& roomAreaRect : generator.generatedRoomAreas) {
+			for (int y_room = roomAreaRect.y; y_room < roomAreaRect.y + roomAreaRect.h; ++y_room) {
+				for (int x_room = roomAreaRect.x; x_room < roomAreaRect.x + roomAreaRect.w; ++x_room) {
+					if (InRange(x_room, 0, MapGenerator::MAP_SIZE - 1) && InRange(y_room, 0, MapGenerator::MAP_SIZE - 1)) {
+						// Mark the area defined by MapGenerator as a room.
+						// This should ideally be Game Floor (1) but for debug it's 5.
+						// Avoid overwriting Start (2) or Goal (4) tiles.
+						if (currentMapGrid[y_room][x_room] != 2 && currentMapGrid[y_room][x_room] != 4) {
+							// If it was MG Floor (now Game Floor 1) or MG Wall (now Game Wall 0), mark as debug room area.
+							currentMapGrid[y_room][x_room] = DEBUG_ROOM_TILE_ID;
+						}
+					}
+				}
 			}
 		}
 	}
+	// --- END DEBUG ---
+
+
+	// マップの境界線を壁にする処理を削除 (ユーザー要望により壁をなくす)
+	// int gridWidth = currentMapGrid.width();
+	// int gridHeight = currentMapGrid.height();
+	// if (gridWidth > 0 && gridHeight > 0) { ... } // Boundary wall code removed
 
 	// 5. 敵をスポーンする（敵の配列が空であることを確認 - 新しいゲームインスタンスが作成される前にデストラクタで処理される）
 	// SとGのタイル位置を取得し、これらの部屋を特定して、それらに敵をスポーンしないようにする。
@@ -114,22 +117,23 @@ void Game::GenerateAndSetupNewMap() {
 				Point spawnPos(spawnX, spawnY);
 
 				// Check if the randomly chosen position is within the map grid bounds
-				// AND is a floor tile (type 0) in currentMapGrid.
+				// AND is a Game Floor tile (type 1) or a Debug Room Tile (type 5) in currentMapGrid.
 				if (s3d::InRange(spawnPos.x, 0, static_cast<int>(currentMapGrid.width() - 1)) &&
-					s3d::InRange(spawnPos.y, 0, static_cast<int>(currentMapGrid.height() - 1)) &&
-					currentMapGrid[spawnPos.y][spawnPos.x] == 0) {
+					s3d::InRange(spawnPos.y, 0, static_cast<int>(currentMapGrid.height() - 1))) {
 
-					Enemys << new BaseEnemy(spawnPos, 0); // 新しい敵（タイプ0）を作成して追加する
-					// 注意：currentMapGrid[spawnPos.y][spawnPos.x]をタイルタイプ3（敵）に変更しないでください。
+					int tileAtSpawn = currentMapGrid[spawnPos.y][spawnPos.x];
+					if (tileAtSpawn == 1 || tileAtSpawn == 5) { // Game Floor (1) or Debug Room Area (5)
+						Enemys << new BaseEnemy(spawnPos, 0); // 新しい敵（タイプ0）を作成して追加する
+						// 注意：currentMapGrid[spawnPos.y][spawnPos.x]をタイルタイプ3（敵）に変更しないでください。
 					// 敵の位置はEnemys配列で追跡されます。
-					break; // 敵を1体生成に成功しました。次に存在する敵がいる場合、その敵に移動します。
+						break; // 敵を1体生成に成功しました。次に存在する敵がいる場合、その敵に移動します。
+					}
 				}
 			}
 		}
 	}
+
 }
-
-
 Game::Game(const InitData& init)
 	: IScene{ init }
 {
@@ -162,15 +166,66 @@ Game::~Game() {
 
 void Game::update()
 {
-	if (KeyNum1.down()) InputMove(-1, 1);
-	if (KeyNum2.down()) InputMove(0, 1);
-	if (KeyNum3.down()) InputMove(1, 1);
-	if (KeyNum4.down()) InputMove(-1, 0);
-	if (KeyNum5.down()) InputMove(0, 0);
-	if (KeyNum6.down()) InputMove(1, 0);
-	if (KeyNum7.down()) InputMove(-1, -1);
-	if (KeyNum8.down()) InputMove(0, -1);
-	if (KeyNum9.down()) InputMove(1, -1);
+	// Continuous Movement Logic
+	Point moveInput(0, 0);
+	bool newKeyPressedThisFrame = false;
+
+	if (KeyNum1.pressed()) moveInput.set(-1, 1);
+	else if (KeyNum2.pressed()) moveInput.set(0, 1);
+	else if (KeyNum3.pressed()) moveInput.set(1, 1);
+	else if (KeyNum4.pressed()) moveInput.set(-1, 0);
+	else if (KeyNum6.pressed()) moveInput.set(1, 0);
+	else if (KeyNum7.pressed()) moveInput.set(-1, -1);
+	else if (KeyNum8.pressed()) moveInput.set(0, -1);
+	else if (KeyNum9.pressed()) moveInput.set(1, -1);
+
+	if (moveInput != Point(0, 0)) {
+		if (!m_heldMoveDirection.has_value() || m_heldMoveDirection.value() != moveInput) {
+			// New direction or first press for this direction sequence
+			newKeyPressedThisFrame = true;
+			m_isAttackIntent = true;
+			InputMove(moveInput.x, moveInput.y);
+			m_heldMoveDirection = moveInput;
+			m_isWaitingForInitialRepeat = true;
+			m_initialMoveDelayTimer.restart();
+		}
+		else { // Key is still held for the same direction
+			m_isAttackIntent = false; // Default to no attack intent for repeats
+			if (m_isWaitingForInitialRepeat) {
+				if (m_initialMoveDelayTimer.reachedZero()) {
+					m_isWaitingForInitialRepeat = false;
+					m_moveRepeatTimer.restart();
+					InputMove(moveInput.x, moveInput.y);
+				}
+			}
+			else if (m_moveRepeatTimer.reachedZero()) {
+				m_moveRepeatTimer.restart();
+				InputMove(moveInput.x, moveInput.y);
+			}
+		}
+	}
+	else {
+		// No move key is pressed
+		if (m_heldMoveDirection.has_value()) { // Was moving, now stopped
+			m_isAttackIntent = false;
+		}
+		m_heldMoveDirection.reset();
+		m_initialMoveDelayTimer.pause();
+		m_moveRepeatTimer.pause();
+		m_isWaitingForInitialRepeat = false;
+		// m_isAttackIntent is reset/false if no keys pressed or just released
+	}
+
+	if (KeyNum5.down()) { // Wait command, single trigger
+		m_isAttackIntent = true;
+		InputMove(0, 0);
+		m_isAttackIntent = false; // Reset after single action
+	}
+
+	// If no new key initiated a move this frame, ensure attack intent is false for any potential subsequent logic.
+	if (!newKeyPressedThisFrame && moveInput == Point(0, 0) && !KeyNum5.down()) {
+		m_isAttackIntent = false;
+	}
 
 	if (KeyM.down()) {
 		showFullMap = !showFullMap;
@@ -191,20 +246,7 @@ void Game::update()
 
 	m_hitEffects.update(); // Update particle effects
 
-	if (IsMove) {
-
-		if (Move == MoveMode::Walk) {
-
-		}
-		if (Move == MoveMode::Run) {
-
-		}
-		if (Move == MoveMode::Hit) {
-
-		}
-	}
-
-	Vec2 lungeVisualOffset = Vec2::Zero();
+	Vec2 lungeVisualOffset = Vec2::Zero(); // This local variable is not used here, lunge offset for drawing is calculated in draw()
 	if (m_playerLungeDirection.has_value() && m_playerLungeTimer.isRunning()) {
 		if (m_playerLungeTimer.reachedZero()) {
 			m_playerLungeDirection.reset();
@@ -223,7 +265,6 @@ void Game::update()
 
 void Game::InputMove(int _x, int _y) {
 
-	IsMove = true;
 
 	Array<Point>enemyPoss;
 	for (auto& enemy : Enemys) {
@@ -251,43 +292,77 @@ void Game::InputMove(int _x, int _y) {
 	camera->MoveCamera(PieceSize, WallThickness, Player->GetPlayerPos());
 
 	//ダメージ
-	if (enemyHitPos != Point{ -1,-1 }) { // If player hit an enemy
-		for (int i = 0; i < Enemys.size(); i++) {
-			if (Enemys[i] && Enemys[i]->GetEnemyPos() == enemyHitPos) { // Added null check for Enemys[i]
-				Enemys[i]->Damage(Player->Attack());
-				m_cameraShakeTimer.restart(); // Start/Restart camera shake
+	if (enemyHitPos != Point{ -1,-1 }) { // If player's intended move was onto an enemy
+		// Stop continuous movement regardless of attack intent
+		m_heldMoveDirection.reset();
+		m_initialMoveDelayTimer.pause();
+		m_moveRepeatTimer.pause();
+		m_isWaitingForInitialRepeat = false;
 
-				// Add particles for hit effect
-				Point enemyGridPos = Enemys[i]->GetEnemyPos();
-				Vec2 enemyCenterPixelPos = Vec2{
-					(PieceSize * enemyGridPos.x) + (WallThickness * (enemyGridPos.x + 1)) + (PieceSize / 2.0),
-					(PieceSize * enemyGridPos.y) + (WallThickness * (enemyGridPos.y + 1)) + (PieceSize / 2.0)
-				};
-				// Adjust particle position by camera shake for consistency,
-				// so particles emit from the "shaken" visual position of the enemy.
-				// However, effects are usually in world space, not screen space affected by camera shake directly.
-				// Let's emit from the true world position. The camera shake will make the source point appear to shake.
-				// For simplicity, using the direct world position without subtracting camera offset here,
-				// as m_hitEffects.draw() will be called in screen space.
-				// The effect system usually handles its own coordinate system relative to screen or world.
-				// If particles need to be in world space and move with camera, need different handling.
-				// Assuming m_hitEffects are screen-space or handle world-to-screen internally.
-				// The position for add<> should be the screen position.
-				// We need to apply the camera offset but NOT the shake to the emission point.
-				Vec2 lungeDir = (enemyHitPos - Player->GetPlayerPos());
-				if (lungeDir.lengthSq() > 0) {
-					lungeDir.normalize();
-				}
-				else {
-					lungeDir = Vec2{ 1,0 }; // Default if somehow on same tile
-				}
-				m_playerLungeDirection = lungeDir;
-				m_playerLungeTimer.restart();
+		if (m_isAttackIntent) { // Only attack if it was an initial, intentional action
+			for (int i = 0; i < Enemys.size(); i++) {
+				if (Enemys[i] && Enemys[i]->GetEnemyPos() == enemyHitPos) {
+					Enemys[i]->Damage(Player->Attack());
+					m_cameraShakeTimer.restart(); // Start/Restart camera shake
 
-				// No need to change tile on map for enemy damage/death, handled by enemy removal
+					// Add particles for hit effect
+					Point enemyGridPos = Enemys[i]->GetEnemyPos();
+					Vec2 enemyCenterPixelPos = Vec2{
+						(PieceSize * enemyGridPos.x) + (WallThickness * (enemyGridPos.x + 1)) + (PieceSize / 2.0),
+						(PieceSize * enemyGridPos.y) + (WallThickness * (enemyGridPos.y + 1)) + (PieceSize / 2.0)
+					};
+					Vec2 lungeDir = (enemyHitPos - Player->GetPlayerPos());
+					if (lungeDir.lengthSq() > 0) {
+						lungeDir.normalize();
+					}
+					else {
+						lungeDir = Vec2{ 1,0 }; // Default if somehow on same tile
+					}
+					m_playerLungeDirection = lungeDir;
+					m_playerLungeTimer.restart();
+					// No need to change tile on map for enemy damage/death, handled by enemy removal
+				}
 			}
 		}
-	}
+		// After processing potential attack, reset intent flag if it was true,
+		// so it's not accidentally reused by other logic before next update cycle.
+		// This is important if InputMove could be called multiple times with stale m_isAttackIntent.
+		// However, the update loop's structure should handle setting it false for repeats.
+		// For safety, if an attack was intended and processed, reset the flag.
+		// This is done after the loop and effects if an attack occurred.
+		bool attackOccurred = false;
+
+		if (m_isAttackIntent) { // Only attack if it was an initial, intentional action
+			for (int i = 0; i < Enemys.size(); i++) { // Iterate through enemies to find the one at enemyHitPos
+				if (Enemys[i] && Enemys[i]->GetEnemyPos() == enemyHitPos) {
+					Enemys[i]->Damage(Player->Attack());
+					m_cameraShakeTimer.restart(); // Start/Restart camera shake
+					attackOccurred = true;
+
+					// Add particles for hit effect (This code was previously misplaced)
+					Point particleOriginEnemyGridPos = Enemys[i]->GetEnemyPos(); // Use 'i' from this loop
+					// Vec2 particleOriginPixelPos = ... ; // Calculate pixel position for particles if needed by m_hitEffects.add
+					// For now, m_hitEffects.add seems to not be used, but lunge is set.
+
+					Vec2 lungeDir = (enemyHitPos - Player->GetPlayerPos());
+					if (lungeDir.lengthSq() > 0) {
+						lungeDir.normalize();
+					}
+					else {
+						lungeDir = Vec2{ 1,0 }; // Default if somehow on same tile
+					}
+					m_playerLungeDirection = lungeDir;
+					m_playerLungeTimer.restart();
+					// No need to change tile on map for enemy damage/death, handled by enemy removal
+					break; // Found and processed the enemy
+				}
+			}
+		}
+
+		if (m_isAttackIntent) { // If an action was intended (even if no specific enemy was hit, e.g. attacking empty space)
+			m_isAttackIntent = false; // Reset intent after the action (or attempted action)
+		}
+	} // End of if (enemyHitPos != Point{ -1,-1 })
 
 	//敵の生存確認 & remove dead enemies
 	// When an enemy dies, its tile should revert to floor (0)
@@ -300,7 +375,7 @@ void Game::InputMove(int _x, int _y) {
 			// Ensure position is valid before writing to grid
 			if (s3d::InRange(deadEnemyPos.x, 0, static_cast<int>(currentMapGrid.width() - 1)) &&
 				s3d::InRange(deadEnemyPos.y, 0, static_cast<int>(currentMapGrid.height() - 1))) {
-				currentMapGrid[deadEnemyPos.y][deadEnemyPos.x] = 0; // Set tile to floor
+				currentMapGrid[deadEnemyPos.y][deadEnemyPos.x] = 1; // Set tile to new Game Floor ID (1)
 			}
 			delete Enemys[i];
 			Enemys.remove_at(i);
@@ -314,8 +389,8 @@ void Game::InputMove(int _x, int _y) {
 	}
 }
 
-// void Game::Map() { // Removed as per instruction
-// }
+	// void Game::Map() { // Removed as per instruction
+	// }
 
 void Game::draw() const
 {
@@ -327,68 +402,40 @@ void Game::draw() const
 	for (int y = 0; y < currentMapGrid.height(); y++) { // Use currentMapGrid
 		for (int x = 0; x < currentMapGrid.width(); x++) { // Use currentMapGrid
 			int tileType = currentMapGrid[y][x];
-			if (tileType == 0) getPaddle(x, y).rounded(3).draw(PieceColor); // Floor
-			else if (tileType == 1) { // Wall
-				bool shouldDrawWall = [&]() {
-					const Point DIRS[] = { {0, -1}, {0, 1}, {-1, 0}, {1, 0} }; // Cardinal directions
-					for (const auto& dir : DIRS) {
-						int nx = x + dir.x;
-						int ny = y + dir.y;
-
-						// Check if neighbor is within bounds
-						if (nx >= 0 && nx < currentMapGrid.width() && ny >= 0 && ny < currentMapGrid.height()) {
-							int neighborTileType = currentMapGrid[ny][nx];
-							// Check if neighbor is a passable tile type
-							if (neighborTileType == 0 || neighborTileType == 2 || neighborTileType == 4) {
-								return true; // Found a passable cardinal neighbor, so this wall should be drawn
-							}
-						}
-				// If neighbor is out of bounds, this wall is on the edge of the map and should be drawn.
-				// The new border logic ensures map edges are walls, so this case might not be
-				// strictly necessary if map edges are always walls and this culling is for internal walls.
-				// However, if a passable tile (e.g. S or G) is on the border, this wall next to it should draw.
-				// And if the map could have non-wall edges (not current case), it'd be important.
-				// For now, the logic is: draw if a cardinal neighbor is passable.
-				// If a cardinal neighbor is out-of-bounds, it's not passable, so we don't draw based on that.
-				// This means walls on the very edge of the map that don't border a passable tile internally
-				// won't be drawn by this logic. The border setting logic in GenerateAndSetupNewMap
-				// ensures the border is wall.
-				// This culling is primarily for *internal* walls that are not adjacent to passable space.
-				// A wall on the border of the grid (e.g. x=0) that has no passable neighbor at (x=1)
-				// would not be drawn by this. This is likely the desired effect: only draw walls "facing" open areas.
-					}
-					return false; // No passable cardinal neighbor found
-					}(); // Immediately invoke the lambda
-
-				if (shouldDrawWall) {
-					getPaddle(x, y).rounded(3).draw(Palette::Dimgray);
-				}
+			if (tileType == 0) { // New Game Wall - Do not draw
+				// No drawing operation
 			}
-			// else if (tileType == 2) getPaddle(x, y).rounded(3).draw(Palette::Green);    // Player Start (Tile itself is Green) - Player drawn separately
-			else if (tileType == 2) { // Player Start Tile - draw as green floor, player entity on top
-				getPaddle(x, y).rounded(3).draw(Palette::Green);
-			}
-			else if (tileType == 4) getPaddle(x, y).rounded(3).draw(Palette::Yellow);  // Goal
-			else { // Default for floor if enemy was there or other unknown
+			else if (tileType == 1) { // New Game Floor
 				getPaddle(x, y).rounded(3).draw(PieceColor);
 			}
+			else if (tileType == 2) { // Player Start Tile
+				getPaddle(x, y).rounded(3).draw(Palette::Green);
+			}
+			else if (tileType == 4) { // Goal
+				getPaddle(x, y).rounded(3).draw(Palette::Yellow);
+			}
+			else if (tileType == 5) { // DEBUG_ROOM_TILE_ID
+				getPaddle(x, y).rounded(3).draw(Palette::Magenta);
+			}
+			// Removed default else case, as all valid tile types should be handled.
+			// If a tile is an unexpected value, it simply won't be drawn.
 		}
 	}
 
 	// Player is drawn by its own class or needs to be drawn here
-	// Player->draw(...); // Assuming BasePlayer has a draw method
-
-	// Explicitly draw the Player
 	if (Player) { // Ensure Player object exists
 		Point playerGridPos = Player->GetPlayerPos();
 		RectF playerBodyBase = getPaddle(playerGridPos.x, playerGridPos.y);
 
-		Vec2 lungeVisualOffset = Vec2::Zero();
+		Vec2 lungeVisualOffsetDraw = Vec2::Zero(); // Renamed to avoid conflict with update's local var
+		if (m_playerLungeDirection.has_value() && m_playerLungeTimer.isRunning()) {
+			double progress = m_playerLungeTimer.progress0_1();
+			double lungeAmplitude = Sin(progress * Math::Pi); // Smooth 0 -> 1 -> 0 curve
+			double lungeDistance = static_cast<double>(PieceSize) * 0.3;
+			lungeVisualOffsetDraw = m_playerLungeDirection.value() * lungeAmplitude * lungeDistance;
+		}
 
-		
-
-
-		RectF playerVisualRect = playerBodyBase.movedBy(lungeVisualOffset);
+		RectF playerVisualRect = playerBodyBase.movedBy(lungeVisualOffsetDraw);
 		playerVisualRect.draw(Player->GetSterts().color);
 	}
 
@@ -402,7 +449,8 @@ void Game::draw() const
 		}
 	}
 
-	m_hitEffects.update(); // Draw particle effects
+	// m_hitEffects.update() was removed from here as it's already in Game::update()
+	// Siv3D Effect system typically handles its own drawing after .update() is called.
 
 	//UI
 	{
@@ -422,55 +470,87 @@ void Game::draw() const
 			(MapGenerator::MAP_SIZE * FullMapTileRenderSize) + 4)
 			.draw(ColorF(0.1, 0.1, 0.1, 0.8));
 
-		for (int y = 0; y < MapGenerator::MAP_SIZE; ++y) {
-			for (int x = 0; x < MapGenerator::MAP_SIZE; ++x) {
-				RectF tileRect(fullMapOffset.x + (x * FullMapTileRenderSize),
-					fullMapOffset.y + (y * FullMapTileRenderSize),
+		for (int y_map = 0; y_map < MapGenerator::MAP_SIZE; ++y_map) { // Renamed loop var
+			for (int x_map = 0; x_map < MapGenerator::MAP_SIZE; ++x_map) { // Renamed loop var
+				RectF tileRect(fullMapOffset.x + (x_map * FullMapTileRenderSize),
+					fullMapOffset.y + (y_map * FullMapTileRenderSize),
 					FullMapTileRenderSize, FullMapTileRenderSize);
 
-				if (y < currentMapGrid.height() && x < currentMapGrid.width()) { // Check bounds for currentMapGrid
-					int tileType = currentMapGrid[y][x];
-					if (tileType == 1) { // Wall
-						tileRect.draw(Palette::Dimgray);
+				if (y_map < currentMapGrid.height() && x_map < currentMapGrid.width()) { // Check bounds
+					int tileTypeOnGrid = currentMapGrid[y_map][x_map]; // Renamed var
+					if (tileTypeOnGrid == 0) { // New Game Wall - Do not draw on full map either
+						// tileRect.draw(Palette::Black); // Or some indicator for "void" if desired
 					}
-					else if (tileType == 0) { // Floor
+					else if (tileTypeOnGrid == 1) { // New Game Floor
 						tileRect.draw(PieceColor);
 					}
-					else if (tileType == 2) { // Original Start Position tile
+					else if (tileTypeOnGrid == 2) { // Original Start Position tile
 						tileRect.draw(Palette::Green);
 					}
-					else if (tileType == 4) { // Goal Position tile
+					else if (tileTypeOnGrid == 4) { // Goal Position tile
 						tileRect.draw(Palette::Yellow);
 					}
-					// Tile type 3 (enemy position) is not explicitly drawn as a tile, enemies are drawn on top
-					else { // Default for any other tile type (e.g. if enemy was 3)
-						tileRect.draw(PieceColor); // Default to floor color
+					else if (tileTypeOnGrid == 5) { // DEBUG_ROOM_TILE_ID
+						tileRect.draw(Palette::Magenta);
 					}
+					// else: other tile types are not drawn on full map
 				}
-				else { // If MapGenerator::MAP_SIZE is larger than currentMapGrid, draw as void/black
-					tileRect.draw(Palette::Black);
+				else {
+					tileRect.draw(Palette::Black); // Out of currentMapGrid bounds
 				}
 			}
-		}
-
-		// Draw Player on the full map
-		if (Player) { // Check if Player exists
-			RectF playerMapRect(fullMapOffset.x + (Player->GetPlayerPos().x * FullMapTileRenderSize),
-				fullMapOffset.y + (Player->GetPlayerPos().y * FullMapTileRenderSize),
-				FullMapTileRenderSize, FullMapTileRenderSize);
-			playerMapRect.draw(Palette::Cyan);
-		}
-
-		// Draw Enemies on the full map
-		for (const auto& enemy : Enemys) {
-			if (enemy) { // Ensure enemy pointer is valid
-				RectF enemyMapRect(fullMapOffset.x + (enemy->GetEnemyPos().x * FullMapTileRenderSize),
-					fullMapOffset.y + (enemy->GetEnemyPos().y * FullMapTileRenderSize),
+			// Draw Player on the full map
+			if (Player) { // Check if Player exists
+				RectF playerMapRect(fullMapOffset.x + (Player->GetPlayerPos().x * FullMapTileRenderSize),
+					fullMapOffset.y + (Player->GetPlayerPos().y * FullMapTileRenderSize),
 					FullMapTileRenderSize, FullMapTileRenderSize);
-				enemyMapRect.draw(Palette::Red);
+				playerMapRect.draw(Palette::Cyan);
+			}
+
+			// Draw Enemies on the full map
+			for (const auto& enemy : Enemys) {
+				if (enemy) { // Ensure enemy pointer is valid
+					RectF enemyMapRect(fullMapOffset.x + (enemy->GetEnemyPos().x * FullMapTileRenderSize),
+						fullMapOffset.y + (enemy->GetEnemyPos().y * FullMapTileRenderSize),
+						FullMapTileRenderSize, FullMapTileRenderSize);
+					enemyMapRect.draw(Palette::Red);
+				}
 			}
 		}
 	}
+
+	// The following block is a duplicate of player/enemy drawing logic that appears earlier in draw().
+	// It is being removed.
+	/*
+	// Player is drawn by its own class or needs to be drawn here
+	// Player->draw(...); // Assuming BasePlayer has a draw method
+
+	// Explicitly draw the Player
+	if (Player) { // Ensure Player object exists
+		Point playerGridPos = Player->GetPlayerPos();
+		RectF playerBodyBase = getPaddle(playerGridPos.x, playerGridPos.y);
+
+		Vec2 lungeVisualOffset = Vec2::Zero();
+
+		RectF playerVisualRect = playerBodyBase.movedBy(lungeVisualOffset);
+		playerVisualRect.draw(Player->GetSterts().color);
+	}
+
+	//敵の移動経路 (Enemies themselves)
+	s3d::Vec2 currentShakeVec = m_cameraShakeOffset.value_or(s3d::Vec2::Zero());
+	s3d::Point effectiveCameraPointForEnemies = camera->GetCamera() - currentShakeVec.asPoint();
+
+	for (auto& enemy : Enemys) {
+		if (enemy) { // Ensure enemy is not null
+			enemy->draw(PieceSize, WallThickness, effectiveCameraPointForEnemies); // Pass shaken camera Point
+		}
+	}
+
+	m_hitEffects.update(); // Draw particle effects // This was the duplicate call.
+	*/
+
+
+
 }
 
 RectF Game::getPaddle(int _x, int _y) const { // Changed return type to RectF

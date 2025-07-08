@@ -1,34 +1,37 @@
-﻿#include "stdafx.h"
+﻿
 #include "MapGenerator.hpp"
 #include <queue> // For std::queue in BFS
 #include <utility> // For std::pair
 
 // Helper function to carve L-shaped paths
 // Static because it doesn't depend on MapGenerator instance members
-static void carvePath(Grid<int>& map, Point p1, Point p2) {
-    if (RandomBool()) { // Horizontal then Vertical
-        for (int x = Min(p1.x, p2.x); x <= Max(p1.x, p2.x); ++x) {
-            if (InRange(x, 0, MapGenerator::MAP_SIZE - 1) && InRange(p1.y, 0, MapGenerator::MAP_SIZE - 1)) {
-                map[p1.y][x] = 1;
-            }
-        }
-        for (int y = Min(p1.y, p2.y); y <= Max(p1.y, p2.y); ++y) {
-            if (InRange(p2.x, 0, MapGenerator::MAP_SIZE - 1) && InRange(y, 0, MapGenerator::MAP_SIZE - 1)) {
-                map[y][p2.x] = 1;
-            }
-        }
-    } else { // Vertical then Horizontal
-        for (int y = Min(p1.y, p2.y); y <= Max(p1.y, p2.y); ++y) {
-            if (InRange(p1.x, 0, MapGenerator::MAP_SIZE - 1) && InRange(y, 0, MapGenerator::MAP_SIZE - 1)) {
-                map[y][p1.x] = 1;
-            }
-        }
-        for (int x = Min(p1.x, p2.x); x <= Max(p1.x, p2.x); ++x) {
-            if (InRange(x, 0, MapGenerator::MAP_SIZE - 1) && InRange(p2.y, 0, MapGenerator::MAP_SIZE - 1)) {
-                map[p2.y][x] = 1;
-            }
-        }
-    }
+// Modified to carve a 1-tile wide path.
+static void carvePath(Grid<int>&map, Point p1, Point p2) {
+	Point current = p1;
+
+	// Move horizontally from p1.x to p2.x at p1.y
+	while (current.x != p2.x) {
+		if (InRange(current.x, 0, MapGenerator::MAP_SIZE - 1) && InRange(current.y, 0, MapGenerator::MAP_SIZE - 1)) {
+			map[current.y][current.x] = 1; // Mark as floor/path
+		}
+		current.x += (p2.x > current.x) ? 1 : -1;
+	}
+	// Ensure the junction point at (p2.x, p1.y) is also carved
+	if (InRange(current.x, 0, MapGenerator::MAP_SIZE - 1) && InRange(current.y, 0, MapGenerator::MAP_SIZE - 1)) {
+		map[current.y][current.x] = 1;
+	}
+
+	// Move vertically from p1.y to p2.y at p2.x
+	while (current.y != p2.y) {
+		if (InRange(current.x, 0, MapGenerator::MAP_SIZE - 1) && InRange(current.y, 0, MapGenerator::MAP_SIZE - 1)) {
+			map[current.y][current.x] = 1; // Mark as floor/path
+		}
+		current.y += (p2.y > current.y) ? 1 : -1;
+	}
+	// Ensure the final destination p2 is also carved
+	if (InRange(current.x, 0, MapGenerator::MAP_SIZE - 1) && InRange(current.y, 0, MapGenerator::MAP_SIZE - 1)) {
+		map[current.y][current.x] = 1;
+	}
 }
 
 // ミニマップ生成処理
@@ -133,13 +136,16 @@ Grid<int> MapGenerator::generateFullMap(const Array<Array<char>>& miniMap) {
 						if (dx == 1) { // Neighbor to the right
 							c1 = Point(current.area.x + current.area.w - 1, Random(current.area.y, current.area.y + current.area.h - 1));
 							c2 = Point(neighbor.area.x, Random(neighbor.area.y, neighbor.area.y + neighbor.area.h - 1));
-						} else if (dx == -1) { // Neighbor to the left
+						}
+						else if (dx == -1) { // Neighbor to the left
 							c1 = Point(current.area.x, Random(current.area.y, current.area.y + current.area.h - 1));
 							c2 = Point(neighbor.area.x + neighbor.area.w - 1, Random(neighbor.area.y, neighbor.area.y + neighbor.area.h - 1));
-						} else if (dy == 1) { // Neighbor below
+						}
+						else if (dy == 1) { // Neighbor below
 							c1 = Point(Random(current.area.x, current.area.x + current.area.w - 1), current.area.y + current.area.h - 1);
 							c2 = Point(Random(neighbor.area.x, neighbor.area.x + neighbor.area.w - 1), neighbor.area.y);
-						} else { // dy == -1, Neighbor above
+						}
+						else { // dy == -1, Neighbor above
 							c1 = Point(Random(current.area.x, current.area.x + current.area.w - 1), current.area.y);
 							c2 = Point(Random(neighbor.area.x, neighbor.area.x + neighbor.area.w - 1), neighbor.area.y + neighbor.area.h - 1);
 						}
@@ -182,7 +188,8 @@ Grid<int> MapGenerator::generateFullMap(const Array<Array<char>>& miniMap) {
 
 	if (activeRooms.isEmpty()) {
 		Console << U"Warning: No active rooms found to interconnect.";
-	} else {
+	}
+	else {
 		// 初期の通路によって接続された部屋のグラフを表す隣接リストを構築する。
 		Array<Array<int>> roomAdjList(activeRooms.size());
 		// アクティブな部屋を反復処理して、最初の通路生成フェーズでどの部屋が接続されたかを確認する。
@@ -301,7 +308,8 @@ Grid<int> MapGenerator::generateFullMap(const Array<Array<char>>& miniMap) {
 			if (rooms[y][x].has_value()) {
 				if (rooms[y][x].value().type == 'S') {
 					sRoomOpt = rooms[y][x].value();
-				} else if (rooms[y][x].value().type == 'G') {
+				}
+				else if (rooms[y][x].value().type == 'G') {
 					gRoomOpt = rooms[y][x].value();
 				}
 			}
@@ -344,7 +352,8 @@ Grid<int> MapGenerator::generateFullMap(const Array<Array<char>>& miniMap) {
 
 	if (map[sRoomCenter.y][sRoomCenter.x] == 1) {
 		bfsStartPointOpt = sRoomCenter;
-	} else {
+	}
+	else {
 		// Iterate through all tiles in sRoom.area to find a passable tile
 		for (int ry = sRoom.area.y; ry < sRoom.area.y + sRoom.area.h; ++ry) {
 			for (int rx = sRoom.area.x; rx < sRoom.area.x + sRoom.area.w; ++rx) {
@@ -361,7 +370,8 @@ Grid<int> MapGenerator::generateFullMap(const Array<Array<char>>& miniMap) {
 	if (!bfsStartPointOpt.has_value()) {
 		Console << U"Error: No passable tile found in Start ('S') room. Cannot perform BFS.";
 		// Proceed to force connection as they are considered disconnected
-	} else {
+	}
+	else {
 		Point startTile = bfsStartPointOpt.value();
 		q.push(startTile);
 		visited[startTile.y][startTile.x] = true;
@@ -401,22 +411,6 @@ Grid<int> MapGenerator::generateFullMap(const Array<Array<char>>& miniMap) {
 
 		carvePath(map, sCenter, gCenter);
 	}
-
-	// --- BEGIN: Convert internal walls to floor ---
-	for (int y = 0; y < MAP_SIZE; ++y) {
-		for (int x = 0; x < MAP_SIZE; ++x) {
-			// Check if the current tile is an "internal" tile (not on the absolute border)
-			if (x > 0 && x < MAP_SIZE - 1 && y > 0 && y < MAP_SIZE - 1) {
-				// If this internal tile is currently a wall (type 0 in MapGenerator's convention)
-				if (map[y][x] == 0) {
-					map[y][x] = 1; // Convert it to a floor tile (type 1)
-				}
-			}
-			// Tiles on the border (x=0, y=0, x=MAP_SIZE-1, y=MAP_SIZE-1) that are walls (type 0)
-			// will remain walls. If they were carved as floor (type 1), they remain floor.
-		}
-	}
-	// --- END: Convert internal walls to floor ---
 
 	return map;
 }

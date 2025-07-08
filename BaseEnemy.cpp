@@ -1,53 +1,54 @@
-﻿#include "stdafx.h"
+﻿
 #include "BaseEnemy.hpp"
 // #include <cmath> // For std::abs, std::round - Siv3D provides s3d::Abs, s3d::Max
 
 // Static helper function for Line-of-Sight check
-static bool HasLineOfSight(Point p1, Point p2, const Grid<int32>& mapData) {
-    int x1 = p1.x;
-    int y1 = p1.y;
-    int x2 = p2.x;
-    int y2 = p2.y;
+static bool HasLineOfSight(Point p1, Point p2, const Grid<int32>&mapData) {
+	int x1 = p1.x;
+	int y1 = p1.y;
+	int x2 = p2.x;
+	int y2 = p2.y;
 
-    int dx = x2 - x1;
-    int dy = y2 - y1;
+	int dx = x2 - x1;
+	int dy = y2 - y1;
 
-    int steps = s3d::Max(s3d::Abs(dx), s3d::Abs(dy));
+	int steps = s3d::Max(s3d::Abs(dx), s3d::Abs(dy));
 
-    if (steps == 0) { // Points are identical
-        return true;
-    }
+	if (steps == 0) { // Points are identical
+		return true;
+	}
 
-    double xIncrement = static_cast<double>(dx) / steps;
-    double yIncrement = static_cast<double>(dy) / steps;
+	double xIncrement = static_cast<double>(dx) / steps;
+	double yIncrement = static_cast<double>(dy) / steps;
 
-    double currentX = x1 + xIncrement; // Start checking from the next cell towards p2
-    double currentY = y1 + yIncrement;
+	double currentX = x1 + xIncrement; // Start checking from the next cell towards p2
+	double currentY = y1 + yIncrement;
 
-    for (int i = 0; i < steps; ++i) {
-        int cellX = static_cast<int>(currentX); // Using static_cast<int> which truncates like floor for positive numbers
-        int cellY = static_cast<int>(currentY); // For negative, it truncates towards zero.
-                                             // Consider s3d::Floor if behavior needs to be strictly floor.
-                                             // For grid indices, simple truncation is often what's intended with DDA.
+	for (int i = 0; i < steps; ++i) {
+		int cellX = static_cast<int>(currentX); // Using static_cast<int> which truncates like floor for positive numbers
+		int cellY = static_cast<int>(currentY); // For negative, it truncates towards zero.
+		// Consider s3d::Floor if behavior needs to be strictly floor.
+		// For grid indices, simple truncation is often what's intended with DDA.
 
-        if (cellX == x2 && cellY == y2) {
-            break; // Reached destination cell, path is clear up to it.
-        }
+		if (cellX == x2 && cellY == y2) {
+			break; // Reached destination cell, path is clear up to it.
+		}
 
-        if (!s3d::InRange(cellX, 0, static_cast<int>(mapData.width() - 1)) ||
-            !s3d::InRange(cellY, 0, static_cast<int>(mapData.height() - 1))) {
-            return false; // Line goes out of bounds, effectively blocked.
-        }
+		if (!s3d::InRange(cellX, 0, static_cast<int>(mapData.width() - 1)) ||
+			!s3d::InRange(cellY, 0, static_cast<int>(mapData.height() - 1))) {
+			return false; // Line goes out of bounds, effectively blocked.
+		}
 
-        if (mapData[cellY][cellX] == 1) { // Assuming 1 is wall tile type
-            return false; // LOS is blocked by a wall.
-        }
+		// Corrected wall check: 0 is wall, 1 is floor.
+		if (mapData[cellY][cellX] == 0) { // 0 is Game Wall
+			return false; // LOS is blocked by a wall.
+		}
 
-        currentX += xIncrement;
-        currentY += yIncrement;
-    }
+		currentX += xIncrement;
+		currentY += yIncrement;
+	}
 
-    return true; // No obstructions found along the line up to (but not including) the target cell.
+	return true; // No obstructions found along the line up to (but not including) the target cell.
 }
 
 
@@ -124,10 +125,10 @@ void BaseEnemy::Chase(Point _Player, Grid<int32>& mapData) {
 	if (AStarSearch(Enemy, _Player, mapData)) {
 		// 経路が見つかった場合、次のマスに進む
 		if (FinalRoute.size() > 1) {
-			mapData[Enemy.y][Enemy.x] = 0;
+			mapData[Enemy.y][Enemy.x] = 1; // Restore old position to Game Floor (1)
 			Enemy = FinalRoute[1];
-			mapData[Enemy.y][Enemy.x] = 3;
-			
+			mapData[Enemy.y][Enemy.x] = 3; // Mark new position as Enemy (3)
+
 		}
 	}
 }
@@ -180,8 +181,15 @@ bool BaseEnemy::AStarSearch(Point start, Point goal, const Grid<int32> mapData) 
 				Point neighbor = { current.point.x + dx, current.point.y + dy };
 
 				// マップ外や障害物がある場合はスキップ
-				if (neighbor.x < 0 || neighbor.y < 0 || neighbor.x >= mapData.width() || neighbor.y >= mapData.height() || mapData[neighbor.y][neighbor.x] == 1) {
-					continue;
+				if (neighbor.x < 0 || neighbor.y < 0 || neighbor.x >= mapData.width() || neighbor.y >= mapData.height()) {
+					continue; // マップ外
+				}
+
+				int neighborTileType = mapData[neighbor.y][neighbor.x];
+				// 通行不可タイル: 0 (壁), 3 (他の敵)
+				// 通行可能タイル: 1 (床), 2 (スタート), 4 (ゴール), 5 (デバッグ部屋)
+				if (neighborTileType == 0 || neighborTileType == 3) {
+					continue; // 通行不可
 				}
 
 				// 既に探索したノード（closedList）には進まない
@@ -248,9 +256,9 @@ void BaseEnemy::Patrol(Grid<int32>& mapData) {
 
 	Point target = PatrolRoute[PatrolIndex];
 	if (AStarSearch(Enemy, target, mapData) && FinalRoute.size() > 1) {
-		mapData[Enemy.y][Enemy.x] = 0;
+		mapData[Enemy.y][Enemy.x] = 1; // Restore old position to Game Floor (1)
 		Enemy = FinalRoute[1];
-		mapData[Enemy.y][Enemy.x] = 3;
+		mapData[Enemy.y][Enemy.x] = 3; // Mark new position as Enemy (3)
 
 		// 目的地に到達したら次の巡回ポイントへ
 		if (Enemy == target) {
@@ -265,9 +273,9 @@ void BaseEnemy::Retreat(Grid<int32>& mapData) {
 
 	Point target = PatrolRoute[PatrolIndex]; // 現在の巡回ポイントへ戻る
 	if (AStarSearch(Enemy, target, mapData) && FinalRoute.size() > 1) {
-		mapData[Enemy.y][Enemy.x] = 0;
+		mapData[Enemy.y][Enemy.x] = 1; // Restore old position to Game Floor (1)
 		Enemy = FinalRoute[1];
-		mapData[Enemy.y][Enemy.x] = 3;
+		mapData[Enemy.y][Enemy.x] = 3; // Mark new position as Enemy (3)
 
 		if (Enemy == target) {
 			EnemyStateMachine = EnemyState::PATROL;
