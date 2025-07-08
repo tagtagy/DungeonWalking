@@ -402,21 +402,5 @@ Grid<int> MapGenerator::generateFullMap(const Array<Array<char>>& miniMap) {
 		carvePath(map, sCenter, gCenter);
 	}
 
-	// --- BEGIN: Convert internal walls to floor ---
-	for (int y = 0; y < MAP_SIZE; ++y) {
-		for (int x = 0; x < MAP_SIZE; ++x) {
-			// Check if the current tile is an "internal" tile (not on the absolute border)
-			if (x > 0 && x < MAP_SIZE - 1 && y > 0 && y < MAP_SIZE - 1) {
-				// If this internal tile is currently a wall (type 0 in MapGenerator's convention)
-				if (map[y][x] == 0) {
-					map[y][x] = 1; // Convert it to a floor tile (type 1)
-				}
-			}
-			// Tiles on the border (x=0, y=0, x=MAP_SIZE-1, y=MAP_SIZE-1) that are walls (type 0)
-			// will remain walls. If they were carved as floor (type 1), they remain floor.
-		}
-	}
-	// --- END: Convert internal walls to floor ---
-
 	return map;
 }
