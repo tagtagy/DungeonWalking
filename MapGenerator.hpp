@@ -19,7 +19,7 @@ public:
 	Array<Rect> generatedRoomAreas;
 
 private:
-	// 各部屋の情報を格納する構造体
+	// 各部屋の情報を格納する構造体a
 	struct Room {
 		Rect area;   // 部屋の矩形領域
 		char type;   // 部屋の種類（S:スタート, G:ゴール, R:通常）
