@@ -181,7 +181,7 @@ void Game::update()
 
 	if (moveInput != Point(0, 0)) {
 		if (!m_heldMoveDirection.has_value() || m_heldMoveDirection.value() != moveInput) {
-			// New direction or first press for this direction sequence
+			// 初回移動
 			newKeyPressedThisFrame = true;
 			m_isAttackIntent = true;
 			InputMove(moveInput.x, moveInput.y);
@@ -189,8 +189,8 @@ void Game::update()
 			m_isWaitingForInitialRepeat = true;
 			m_initialMoveDelayTimer.restart();
 		}
-		else { // Key is still held for the same direction
-			m_isAttackIntent = false; // Default to no attack intent for repeats
+		else { // 移動ボタン長押し
+			m_isAttackIntent = false; // 不意の攻撃を無効
 			if (m_isWaitingForInitialRepeat) {
 				if (m_initialMoveDelayTimer.reachedZero()) {
 					m_isWaitingForInitialRepeat = false;
@@ -205,7 +205,7 @@ void Game::update()
 		}
 	}
 	else {
-		// No move key is pressed
+		// 移動キーは押されていません
 		if (m_heldMoveDirection.has_value()) { // Was moving, now stopped
 			m_isAttackIntent = false;
 		}
@@ -280,11 +280,11 @@ void Game::InputMove(int _x, int _y) {
 		const int MAX_STAGES = 10; // Define max stages
 
 		if (Game::s_currentStage >= MAX_STAGES) {
-			Game::s_currentStage = 0; // Reset for the next full game playthrough
+			Game::s_currentStage = 0; // 次のフルゲームプレイスルー用にリセット
 			changeScene(State::Title);
 		}
 		else {
-			changeScene(State::Game); // Reload the game scene for the next stage
+			changeScene(State::Game); // 次のステージのためにゲームシーンを再読み込みする
 		}
 		return; // Important: Stop further processing in InputMove after a scene change
 	}

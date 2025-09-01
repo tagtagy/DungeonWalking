@@ -77,22 +77,22 @@ private:
 	bool showFullMap = false;
 
 	// Attack Effects & Timers
-	s3d::Effect m_hitEffects;
-	s3d::Optional<s3d::Vec2> m_cameraShakeOffset;
-	s3d::Timer m_cameraShakeTimer{ 0.2s, s3d::StartImmediately::No };
-	s3d::Optional<s3d::Vec2> m_playerLungeDirection; // To be used for Bump animation
-	s3d::Timer m_playerLungeTimer{ 0.2s, s3d::StartImmediately::No };   // Adjusted for Bump (was 0.15s for Lunge)
+	Effect m_hitEffects;
+	Optional<s3d::Vec2> m_cameraShakeOffset;
+	Timer m_cameraShakeTimer{ 0.2s, s3d::StartImmediately::No };
+	Optional<s3d::Vec2> m_playerLungeDirection; // バンプアニメーションに使用する
+	Timer m_playerLungeTimer{ 0.2s, s3d::StartImmediately::No };   // バンプ調整済み（ランジ時は0.15秒）
 
-	// Continuous Movement
-	s3d::Timer m_initialMoveDelayTimer{ 0.4s, s3d::StartImmediately::No };
-	s3d::Timer m_moveRepeatTimer{ 0.12s, s3d::StartImmediately::No };
-	s3d::Optional<Point> m_heldMoveDirection;
+	// 連続的な動き
+	Timer m_initialMoveDelayTimer{ 0.4s, s3d::StartImmediately::No };
+	Timer m_moveRepeatTimer{ 0.12s, s3d::StartImmediately::No };
+	Optional<Point> m_heldMoveDirection;
 	bool m_isWaitingForInitialRepeat = false;
-	bool m_isAttackIntent = false; // Added for controlling attack on initial press
+	bool m_isAttackIntent = false; // 初期押下時の攻撃制御用に追加
 
 	// Player Slide Animation
-	s3d::Optional<s3d::Vec2> m_playerSlideAnimDirection;
-	s3d::Timer m_playerSlideAnimTimer{ 0.12s, s3d::StartImmediately::No }; // Duration of slide
+	Optional<s3d::Vec2> m_playerSlideAnimDirection;
+	Timer m_playerSlideAnimTimer{ 0.12s, s3d::StartImmediately::No }; // Duration of slide
 
 public: // Made public for access in Game.cpp for now, can be refactored if Game class owns render consts
 	static constexpr int FullMapTileRenderSize = 8;

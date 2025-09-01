@@ -2,7 +2,7 @@
 #include "BasePlayer.hpp"
 
 BasePlayer::BasePlayer() {
-	// Player.x and Player.y are initialized by SetPlayerPos or default constructor of Point
+	// Player.x と Player.y は SetPlayerPos または Point のデフォルトコンストラクタによって初期化される
 }
 
 Point BasePlayer::Move(int _x, int _y, Grid<int32>& mapData) {
@@ -14,13 +14,13 @@ Point BasePlayer::Move(int _x, int _y, Grid<int32>& mapData) {
 
 		int targetTileType = mapData[targetPos.y][targetPos.x];
 
-		// Tile type definitions for clarity (matching Game.cpp new definitions)
-		// 0: Game Wall (Not Passable, Not Drawn)
-		// 1: Game Floor (Passable, Drawn with PieceColor)
-		// 2: Player Start (Passable, Drawn Green)
-		// 3: Enemy (Passable for attack intent, not for movement, enemies are separate entities)
-		// 4: Goal (Passable, Drawn Yellow)
-		// 5: Debug Room Area (Passable, Drawn Magenta)
+		// 明確化のためのタイルタイプ定義（Game.cppの新定義と対応）
+		// 0: ゲーム壁（通行不可、描画不可）
+		// 1: ゲーム床（通行可、ピースカラーで描画）
+		// 2: プレイヤー開始位置（通行可、緑色で描画）
+		// 3: 敵（攻撃意図のための通行可、移動不可。敵は別エンティティ）
+		// 4: ゴール（通行可能、黄色で描画）
+		// 5: デバッグルームエリア（通行可能、マゼンタで描画）
 
 		bool canMoveToTarget = false;
 		if (targetTileType == 1 || // New Game Floor
