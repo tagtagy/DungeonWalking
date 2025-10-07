@@ -23,7 +23,7 @@ public:
 
 	void update() override;
 
-	void InputMove(int _x, int _y);
+	void InputMove(const Point _moveInput);
 
 	// void Map(); // Removed
 	void draw() const override;
@@ -31,6 +31,16 @@ public:
 private:
 	void GenerateAndSetupNewMap(); // Added
 
+	//タイル別イベント関数///////////////
+	// 明確化のためのタイルタイプ定義（Game.cppの新定義と対応）
+	
+	void Wall(const Point _moveInput);// 0: ゲーム壁（通行不可、描画不可）
+	void Floor(const Point _moveInput);// 1: ゲーム床（通行可、ピースカラーで描画） 2: プレイヤー開始位置（通行可、緑色で描画）5: デバッグルームエリア（通行可能、マゼンタで描画）
+	void Enemy(const Point _moveInput);// 3: 敵（攻撃意図のための通行可、移動不可。敵は別エンティティ）
+	void Gool(const Point _moveInput);// 4: ゴール（通行可能、黄色で描画）
+	
+	/////////////////////////////////////
+	
 	//マップ系
 	Grid<int32> currentMapGrid; // 動的に生成されたマップを保存します。
 	// 壁の厚さ

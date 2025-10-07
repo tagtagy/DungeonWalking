@@ -166,25 +166,32 @@ Game::~Game() {
 
 void Game::update()
 {
-	// Continuous Movement Logic
-	Point moveInput(0, 0);
+	Point moveInput = Point(2, 2);
 	bool newKeyPressedThisFrame = false;
 
 	if (KeyNum1.pressed()) moveInput.set(-1, 1);
 	else if (KeyNum2.pressed()) moveInput.set(0, 1);
 	else if (KeyNum3.pressed()) moveInput.set(1, 1);
 	else if (KeyNum4.pressed()) moveInput.set(-1, 0);
+	else if (KeyNum5.down()) moveInput.set(0, 0);//これだけ連続選択させない
 	else if (KeyNum6.pressed()) moveInput.set(1, 0);
 	else if (KeyNum7.pressed()) moveInput.set(-1, -1);
 	else if (KeyNum8.pressed()) moveInput.set(0, -1);
 	else if (KeyNum9.pressed()) moveInput.set(1, -1);
+	
 
-	if (moveInput != Point(0, 0)) {
-		if (!m_heldMoveDirection.has_value() || m_heldMoveDirection.value() != moveInput) {
+	if (Abs(moveInput.x) < 2 &&
+		Abs(moveInput.y) < 2) {//通常の移動の場合
+
+		if (moveInput == Point::Zero()) {//足踏みをする時
+			m_isAttackIntent = false;
+			InputMove(Point::Zero());
+		}
+		else if (!m_heldMoveDirection.has_value() || m_heldMoveDirection.value() != moveInput) {
 			// 初回移動
 			newKeyPressedThisFrame = true;
 			m_isAttackIntent = true;
-			InputMove(moveInput.x, moveInput.y);
+			InputMove(moveInput);
 			m_heldMoveDirection = moveInput;
 			m_isWaitingForInitialRepeat = true;
 			m_initialMoveDelayTimer.restart();
@@ -195,18 +202,18 @@ void Game::update()
 				if (m_initialMoveDelayTimer.reachedZero()) {
 					m_isWaitingForInitialRepeat = false;
 					m_moveRepeatTimer.restart();
-					InputMove(moveInput.x, moveInput.y);
+					InputMove(moveInput);
 				}
 			}
 			else if (m_moveRepeatTimer.reachedZero()) {
 				m_moveRepeatTimer.restart();
-				InputMove(moveInput.x, moveInput.y);
+				InputMove(moveInput);
 			}
 		}
 	}
 	else {
-		// 移動キーは押されていません
-		if (m_heldMoveDirection.has_value()) { // Was moving, now stopped
+		// 移動キーが押されていない時
+		if (m_heldMoveDirection.has_value()) { // 動いていたが、今は止まった
 			m_isAttackIntent = false;
 		}
 		m_heldMoveDirection.reset();
@@ -216,22 +223,11 @@ void Game::update()
 		// m_isAttackIntent is reset/false if no keys pressed or just released
 	}
 
-	if (KeyNum5.down()) { // Wait command, single trigger
-		m_isAttackIntent = true;
-		InputMove(0, 0);
-		m_isAttackIntent = false; // Reset after single action
-	}
-
-	// If no new key initiated a move this frame, ensure attack intent is false for any potential subsequent logic.
-	if (!newKeyPressedThisFrame && moveInput == Point(0, 0) && !KeyNum5.down()) {
-		m_isAttackIntent = false;
-	}
-
-	if (KeyM.down()) {
+	if (KeyM.down()) {//マップの出し入れ
 		showFullMap = !showFullMap;
 	}
 
-	// Camera Shake Logic
+	// カメラブレロジック
 	if (m_cameraShakeTimer.isRunning()) {
 		if (m_cameraShakeTimer.reachedZero()) {
 			m_cameraShakeOffset.reset();
@@ -263,134 +259,166 @@ void Game::update()
 	}
 }
 
-void Game::InputMove(int _x, int _y) {
-
+void Game::InputMove(const Point _moveInput) {
 
 	Array<Point>enemyPoss;
 	for (auto& enemy : Enemys) {
 		enemyPoss << enemy->GetEnemyPos();
 	}
 
-	//プレイヤー移動
-	Point enemyHitPos = Player->Move(_x, _y, currentMapGrid); // Use currentMapGrid
-
 	//プレイヤーがマップを進めるマスにいるか (Goal tile is 4)
-	if (currentMapGrid[Player->GetPlayerPos().y][Player->GetPlayerPos().x] == 4) {
-		Game::s_currentStage++;
-		const int MAX_STAGES = 10; // Define max stages
-
-		if (Game::s_currentStage >= MAX_STAGES) {
-			Game::s_currentStage = 0; // 次のフルゲームプレイスルー用にリセット
-			changeScene(State::Title);
-		}
-		else {
-			changeScene(State::Game); // 次のステージのためにゲームシーンを再読み込みする
-		}
-		return; // Important: Stop further processing in InputMove after a scene change
+	switch (currentMapGrid[_moveInput.y + Player->GetPlayerPos().y][_moveInput.x + Player->GetPlayerPos().x])
+	{
+	case 0:
+		Wall(_moveInput);
+		break;
+	case 1:
+		Floor(_moveInput);
+		break;
+	case 2:
+		Floor(_moveInput);
+		break;
+	case 3:
+		Enemy(_moveInput);
+		break;
+	case 4:
+		Gool(_moveInput);
+		return; // 重要：シーン変更後、InputMoveでのさらなる処理を停止
+	case 5:
+		Floor(_moveInput);
+		break;
+	default:
+		break;
 	}
+
 	//カメラ更新
 	camera->MoveCamera(PieceSize, WallThickness, Player->GetPlayerPos());
 
-	//ダメージ
-	if (enemyHitPos != Point{ -1,-1 }) { // If player's intended move was onto an enemy
-		// Stop continuous movement regardless of attack intent
-		m_heldMoveDirection.reset();
-		m_initialMoveDelayTimer.pause();
-		m_moveRepeatTimer.pause();
-		m_isWaitingForInitialRepeat = false;
-
-		if (m_isAttackIntent) { // Only attack if it was an initial, intentional action
-			for (int i = 0; i < Enemys.size(); i++) {
-				if (Enemys[i] && Enemys[i]->GetEnemyPos() == enemyHitPos) {
-					Enemys[i]->Damage(Player->Attack());
-					m_cameraShakeTimer.restart(); // Start/Restart camera shake
-
-					// Add particles for hit effect
-					Point enemyGridPos = Enemys[i]->GetEnemyPos();
-					Vec2 enemyCenterPixelPos = Vec2{
-						(PieceSize * enemyGridPos.x) + (WallThickness * (enemyGridPos.x + 1)) + (PieceSize / 2.0),
-						(PieceSize * enemyGridPos.y) + (WallThickness * (enemyGridPos.y + 1)) + (PieceSize / 2.0)
-					};
-					Vec2 lungeDir = (enemyHitPos - Player->GetPlayerPos());
-					if (lungeDir.lengthSq() > 0) {
-						lungeDir.normalize();
-					}
-					else {
-						lungeDir = Vec2{ 1,0 }; // Default if somehow on same tile
-					}
-					m_playerLungeDirection = lungeDir;
-					m_playerLungeTimer.restart();
-					// No need to change tile on map for enemy damage/death, handled by enemy removal
-				}
-			}
-		}
-		// After processing potential attack, reset intent flag if it was true,
-		// so it's not accidentally reused by other logic before next update cycle.
-		// This is important if InputMove could be called multiple times with stale m_isAttackIntent.
-		// However, the update loop's structure should handle setting it false for repeats.
-		// For safety, if an attack was intended and processed, reset the flag.
-		// This is done after the loop and effects if an attack occurred.
-		bool attackOccurred = false;
-
-		if (m_isAttackIntent) { // Only attack if it was an initial, intentional action
-			for (int i = 0; i < Enemys.size(); i++) { // Iterate through enemies to find the one at enemyHitPos
-				if (Enemys[i] && Enemys[i]->GetEnemyPos() == enemyHitPos) {
-					Enemys[i]->Damage(Player->Attack());
-					m_cameraShakeTimer.restart(); // Start/Restart camera shake
-					attackOccurred = true;
-
-					// Add particles for hit effect (This code was previously misplaced)
-					Point particleOriginEnemyGridPos = Enemys[i]->GetEnemyPos(); // Use 'i' from this loop
-					// Vec2 particleOriginPixelPos = ... ; // Calculate pixel position for particles if needed by m_hitEffects.add
-					// For now, m_hitEffects.add seems to not be used, but lunge is set.
-
-					Vec2 lungeDir = (enemyHitPos - Player->GetPlayerPos());
-					if (lungeDir.lengthSq() > 0) {
-						lungeDir.normalize();
-					}
-					else {
-						lungeDir = Vec2{ 1,0 }; // Default if somehow on same tile
-					}
-					m_playerLungeDirection = lungeDir;
-					m_playerLungeTimer.restart();
-					// No need to change tile on map for enemy damage/death, handled by enemy removal
-					break; // Found and processed the enemy
-				}
-			}
-		}
-
-		if (m_isAttackIntent) { // If an action was intended (even if no specific enemy was hit, e.g. attacking empty space)
-			m_isAttackIntent = false; // Reset intent after the action (or attempted action)
-		}
-	} // End of if (enemyHitPos != Point{ -1,-1 })
-
-	//敵の生存確認 & remove dead enemies
-	// When an enemy dies, its tile should revert to floor (0)
-	// This part is tricky: BaseEnemy doesn't store its original tile type.
-	// For now, we assume if an enemy was on a tile, it becomes floor (0).
-	// A better way would be to have a separate grid for dynamic entities or store original tile.
+	// 敵の生存確認 & 倒れた敵を削除
+    // 敵が倒れた際、そのタイルは床（0）に戻るべき
+    // 注意：BaseEnemyは元のタイルタイプを保持していない
+    // 暫定措置として、敵がタイル上にいた場合、床（0）とみなす
+    // 改善策：動的エンティティ用に別グリッドを用意するか、元のタイルを保存する
 	for (int i = static_cast<int>(Enemys.size()) - 1; i >= 0; --i) {
 		if (Enemys[i]->GetDeath()) {
 			Point deadEnemyPos = Enemys[i]->GetEnemyPos();
-			// Ensure position is valid before writing to grid
+			// グリッドへの書き込み前に位置が有効であることを確認する
 			if (s3d::InRange(deadEnemyPos.x, 0, static_cast<int>(currentMapGrid.width() - 1)) &&
 				s3d::InRange(deadEnemyPos.y, 0, static_cast<int>(currentMapGrid.height() - 1))) {
-				currentMapGrid[deadEnemyPos.y][deadEnemyPos.x] = 1; // Set tile to new Game Floor ID (1)
+				currentMapGrid[deadEnemyPos.y][deadEnemyPos.x] = 1; // タイルを新しいゲームフロアIDに設定 (1)
 			}
 			delete Enemys[i];
 			Enemys.remove_at(i);
 		}
 	}
-	// Enemys.remove_if([](BaseEnemy* x) {bool isDead = x->GetDeath(); if(isDead) delete x; return isDead; }); // Alternative with delete
-
+	
 	//エネミー移動と攻撃
-	for (auto& currentEnemy : Enemys) { // Renamed to avoid conflict
-		Player->Damage(currentEnemy->Move(Player->GetPlayerPos(), currentMapGrid)); // Use currentMapGrid
+	for (auto& currentEnemy : Enemys) { // 競合を避けるために名前を変更しました
+		Player->Damage(currentEnemy->Move(Player->GetPlayerPos(), currentMapGrid)); // currentMapGridを使う
 	}
 }
 
-	// void Game::Map() { // Removed as per instruction
-	// }
+void Game::Wall(const Point _moveInput) {// 0: ゲーム壁（通行不可、描画不可）
+
+}
+
+void Game::Floor(const Point _moveInput) {
+	//プレイヤー移動
+	Point enemyHitPos = Player->Move(_moveInput.x, _moveInput.y, currentMapGrid); // currentMapGridを使用する
+}
+
+void Game::Enemy(const Point _moveInput) {// 3: 敵（攻撃意図のための通行可、移動不可。敵は別エンティティ）
+	// プレイヤーの意図した移動先が敵だった場合
+		// 攻撃意図に関わらず連続移動を停止する
+	m_heldMoveDirection.reset();
+	m_initialMoveDelayTimer.pause();
+	m_moveRepeatTimer.pause();
+	m_isWaitingForInitialRepeat = false;
+
+	if (m_isAttackIntent) { // 最初の意図的な行動であった場合にのみ攻撃する
+		for (int i = 0; i < Enemys.size(); i++) {
+			if (Enemys[i] && Enemys[i]->GetEnemyPos() == _moveInput + Player->GetPlayerPos()) {
+				Enemys[i]->Damage(Player->Attack());
+				m_cameraShakeTimer.restart(); // カメラの揺れを開始/再開する
+
+				// ヒット効果用の粒子を追加する
+				Point enemyGridPos = Enemys[i]->GetEnemyPos();
+				Vec2 enemyCenterPixelPos = Vec2{
+					(PieceSize * enemyGridPos.x) + (WallThickness * (enemyGridPos.x + 1)) + (PieceSize / 2.0),
+					(PieceSize * enemyGridPos.y) + (WallThickness * (enemyGridPos.y + 1)) + (PieceSize / 2.0)
+				};
+
+				Vec2 lungeDir = (_moveInput);
+				if (lungeDir.lengthSq() > 0) {
+					lungeDir.normalize();
+				}
+				else {
+					//lungeDir = Vec2{ 1,0 }; // 何らかの理由で同じタイル上にある場合、デフォルト
+				}
+				m_playerLungeDirection = lungeDir;
+				m_playerLungeTimer.restart();
+				// 敵のダメージ/死亡時にマップ上のタイルを変更する必要はありません。敵の除去処理で対応されます。
+			}
+		}
+	}
+	// 潜在的な攻撃処理後、攻撃意図フラグがtrueだった場合はリセットする。
+	// これにより、次の更新サイクル前に他のロジックで誤って再利用されるのを防ぐ。
+	// InputMoveが古いm_isAttackIntentで複数回呼び出される可能性がある場合、これは重要である。
+	// ただし、更新ループの構造は繰り返し処理時にフラグをfalseに設定するよう設計すべきである。
+	// 安全のため、攻撃が意図され処理された場合はフラグをリセットする。
+	// これはループ終了後に実行され、攻撃発生の可否に影響する。
+	bool attackOccurred = false;
+
+	if (m_isAttackIntent) { // 最初の意図的な行動であった場合にのみ攻撃する
+		for (int i = 0; i < Enemys.size(); i++) { // 敵を順に調べ、enemyHitPosの位置にいる敵を見つける
+			if (Enemys[i] && Enemys[i]->GetEnemyPos() == _moveInput + Player->GetPlayerPos()) {
+				Enemys[i]->Damage(Player->Attack());
+				m_cameraShakeTimer.restart(); // カメラの揺れを開始/再開する
+				attackOccurred = true;
+
+				// ヒット効果用のパーティクルを追加（このコードは以前誤って配置されていました）
+				Point particleOriginEnemyGridPos = Enemys[i]->GetEnemyPos(); // このループから 『i』 を使用
+                // Vec2 particleOriginPixelPos = ... ; // m_hitEffects.add で必要に応じてパーティクルのピクセル位置を計算
+                // 現時点では m_hitEffects.add は使用されていないようだが、lunge は設定されている。
+
+				Vec2 lungeDir = (_moveInput);
+				if (lungeDir.lengthSq() > 0) {
+					lungeDir.normalize();
+				}
+				else {
+					lungeDir = Vec2{ 1,0 }; // 何らかの理由で同じタイル上にいる場合、デフォルト
+				}
+				m_playerLungeDirection = lungeDir;
+				m_playerLungeTimer.restart();
+				// 敵のダメージ/死亡時にマップ上のタイルを変更する必要はありません。敵の除去処理で対応されます。
+				break; // 敵を発見し処理した
+			}
+		}
+	}
+
+	if (m_isAttackIntent) { // もし行動が意図されていた場合（たとえ特定の敵を攻撃しなかった場合でも、例えば空虚な空間を攻撃した場合など）
+		m_isAttackIntent = false; // アクション（またはアクションの試行）後に意図をリセットする
+	}
+}
+
+void Game::Gool(const Point _moveInput) {// 4: ゴール（通行可能、黄色で描画）
+
+	//プレイヤー移動
+	Point enemyHitPos = Player->Move(_moveInput.x, _moveInput.y, currentMapGrid); // currentMapGridを使用する
+
+	Game::s_currentStage++;
+	const int MAX_STAGES = 10; // 最大ステージ数を定義する
+
+	if (Game::s_currentStage >= MAX_STAGES) {
+		Game::s_currentStage = 0; // 次のフルゲームプレイスルー用にリセット
+		changeScene(State::Title);
+	}
+	else {
+		changeScene(State::Game); // 次のステージのためにゲームシーンを再読み込みする
+	}
+	
+}
+
 
 void Game::draw() const
 {

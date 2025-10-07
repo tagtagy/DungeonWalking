@@ -6,7 +6,7 @@ class BasePlayer
 public:
 	BasePlayer();
 
-	Point Move(int _x, int _y,Grid<int32>& mapData);
+	Point Move(int _x, int _y,const Grid<int32> mapData);
 
 	//攻撃
 	int Attack() { return Sterts.atc; };
