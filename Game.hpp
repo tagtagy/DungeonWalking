@@ -35,7 +35,7 @@ private:
 	// 明確化のためのタイルタイプ定義（Game.cppの新定義と対応）
 	
 	void Wall(const Point _moveInput);// 0: ゲーム壁（通行不可、描画不可）
-	void Floor(const Point _moveInput);// 1: ゲーム床（通行可、ピースカラーで描画） 2: プレイヤー開始位置（通行可、緑色で描画）5: デバッグルームエリア（通行可能、マゼンタで描画）
+	void Floor(const Point _moveInput);// 1: ゲーム床（白） 2: プレイヤー開始位置（緑）5: デバッグエリア（マゼンタ）
 	void Enemy(const Point _moveInput);// 3: 敵（攻撃意図のための通行可、移動不可。敵は別エンティティ）
 	void Gool(const Point _moveInput);// 4: ゴール（通行可能、黄色で描画）
 	
@@ -75,7 +75,7 @@ private:
 		Texture{Image(Resource(U"example/トゥマレ/トゥマレ_口開き.png")).thresholded_Otsu()},
 		Texture{Image(Resource(U"example/トゥマレ/トゥマレ_目閉じ.png")).thresholded_Otsu()}
 	};
-
+	//////////////////////////////////////
 
 	BasePlayer* Player = nullptr;
 
@@ -83,10 +83,10 @@ private:
 
 	Camera* camera = nullptr;
 
-	// Full map display toggle
+	// 全マップ表示の切り替え
 	bool showFullMap = false;
 
-	// Attack Effects & Timers
+	// 攻撃効果とタイマー
 	Effect m_hitEffects;
 	Optional<s3d::Vec2> m_cameraShakeOffset;
 	Timer m_cameraShakeTimer{ 0.2s, s3d::StartImmediately::No };
@@ -100,10 +100,10 @@ private:
 	bool m_isWaitingForInitialRepeat = false;
 	bool m_isAttackIntent = false; // 初期押下時の攻撃制御用に追加
 
-	// Player Slide Animation
+	// プレイヤーのスライドアニメーション
 	Optional<s3d::Vec2> m_playerSlideAnimDirection;
-	Timer m_playerSlideAnimTimer{ 0.12s, s3d::StartImmediately::No }; // Duration of slide
+	Timer m_playerSlideAnimTimer{ 0.12s, s3d::StartImmediately::No }; // スライドの持続時間
 
-public: // Made public for access in Game.cpp for now, can be refactored if Game class owns render consts
+public: // 現時点ではGame.cppでアクセス可能に公開されています。Gameクラスがレンダリング定数を所有する場合、リファクタリングが可能です。
 	static constexpr int FullMapTileRenderSize = 8;
 };
